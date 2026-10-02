@@ -24,6 +24,7 @@ FROM nginx:alpine
 # (node_modules, source .jsx files, Node itself) gets left behind —
 # it never makes it into this final image.
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 # nginx starts automatically as the container's main process —
