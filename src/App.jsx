@@ -10,7 +10,7 @@ function App() {
   // then setStatus updates it — React automatically re-renders when it changes
 
   useEffect(() => {
-    fetch("http://localhost:5000/health")
+    fetch("/api/health")
       .then((response) => response.json()) // parse the JSON body Flask sent back
       .then((data) => setStatus(data.status)) // pull out {"status": "ok"} -> "ok"
       .catch((error) => setStatus("error: backend unreachable"));
