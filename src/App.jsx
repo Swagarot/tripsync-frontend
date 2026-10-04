@@ -13,12 +13,17 @@ function App() {
     fetch("/api/health") // make a GET request to Flask's /api/health endpoint
       .then((response) => response.json()) // parse the JSON body Flask sent back
       .then((data) => setStatus(data.status)) // pull out {"status": "ok"} -> "ok"
-      .catch((error) => setStatus("error: backend unreachable"));
+      .catch((error) => {
+       console.error("Health check failed:", error);
+       setStatus("error: backend unreachable");
+      });
+      
       // if Flask isn't running, or CORS blocks it (more on that below),
       // this catches it so the page doesn't just silently break
   }, []); // the empty [] means "only run this once, when the page first loads"
           // — without it, this would refetch on every re-render, in a loop
 
+          
   return (
     <div>
       <h1>TripSync</h1>
