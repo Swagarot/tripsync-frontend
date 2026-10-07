@@ -105,16 +105,19 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                // --reset-then-reuse-values keeps the backend tag from the
-                // previous release and only changes ours. -n default is where
-                // the release is stored; pods run in 'tripsync'.
-                sh '''
-                    helm upgrade tripsync devops/k8s-helm/tripsync -n default \
-                      --reset-then-reuse-values \
-                      --set-string frontend.image.tag=$IMAGE_TAG \
-                      --atomic --timeout 3m
-                    kubectl get pods -n tripsync
-                '''
+                // Same lock as the backend job: one helm upgrade at a time.
+                lock('tripsync-release') {
+                    // --reset-then-reuse-values keeps the backend tag from the
+                    // previous release and only changes ours. -n default is
+                    // where the release is stored; pods run in 'tripsync'.
+                    sh '''
+                        helm upgrade tripsync devops/k8s-helm/tripsync -n default \
+                          --reset-then-reuse-values \
+                          --set-string frontend.image.tag=$IMAGE_TAG \
+                          --atomic --timeout 3m
+                        kubectl get pods -n tripsync
+                    '''
+                }
             }
         }
     }
