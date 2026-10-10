@@ -100,6 +100,8 @@ pipeline {
             steps {
                 // Secret exposed only inside this block and masked in logs.
                 // Triple single quotes: the shell expands $DH_TOKEN, not Groovy.
+                // 'latest' is pushed too, for the backend job's first install
+                // on a fresh cluster (see the backend Jenkinsfile).
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
                     usernameVariable: 'DH_USER',
@@ -107,6 +109,8 @@ pipeline {
                     sh '''
                         echo "$DH_TOKEN" | docker login -u "$DH_USER" --password-stdin
                         docker push $IMAGE_NAME:$IMAGE_TAG
+                        docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
+                        docker push $IMAGE_NAME:latest
                     '''
                 }
             }
@@ -119,6 +123,7 @@ pipeline {
                     // --reset-then-reuse-values keeps the backend tag from the
                     // previous release and only changes ours. -n default is
                     // where the release is stored; pods run in 'tripsync'.
+                    // --install: install the release if it doesn't exist yet.
                     script {
                         if (params.TARGET == 'eks') {
                             // Two Secret-text credentials, exposed as the env
@@ -138,7 +143,7 @@ pipeline {
                                     export KUBECONFIG="$WORKSPACE/kubeconfig-eks"
                                     aws eks update-kubeconfig --name tripsync-cluster \
                                       --kubeconfig "$WORKSPACE/kubeconfig-eks"
-                                    helm upgrade tripsync devops/k8s-helm/tripsync -n tripsync \
+                                    helm upgrade --install tripsync devops/k8s-helm/tripsync -n tripsync \
                                       --reset-then-reuse-values \
                                       --set-string frontend.image.tag=$IMAGE_TAG \
                                       --atomic --timeout 3m
@@ -148,7 +153,7 @@ pipeline {
                         } else {
                             // k3s: unchanged, uses ~/.kube/config on the agent.
                             sh '''
-                                helm upgrade tripsync devops/k8s-helm/tripsync -n default \
+                                helm upgrade --install tripsync devops/k8s-helm/tripsync -n default \
                                   --reset-then-reuse-values \
                                   --set-string frontend.image.tag=$IMAGE_TAG \
                                   --atomic --timeout 3m
