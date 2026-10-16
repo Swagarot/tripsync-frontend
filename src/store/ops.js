@@ -139,6 +139,10 @@ function newStop(o) {
     photo_url: null,
     website: null,
     opening_hours: null,
+    rating: null,
+    visited: false,
+    cover_photo_id: null,
+    photos: [],
     ...o.fields,
   };
 }

@@ -53,3 +53,14 @@ describe("currency", () => {
     expect(t.unconverted.map((e) => e.currency)).toEqual(["VND"]);
   });
 });
+
+describe("stop picture", () => {
+  it("is your chosen cover, else the famous photo, else your first photo", async () => {
+    const { coverUrl } = await import("./photos.js");
+    const own = [{ id: "a", thumb_url: "/a" }, { id: "b", thumb_url: "/b" }];
+    expect(coverUrl({ photo_url: "https://wiki/x.jpg", photos: own, cover_photo_id: "b" })).toBe("/b");
+    expect(coverUrl({ photo_url: "https://wiki/x.jpg", photos: own, cover_photo_id: null })).toBe("https://wiki/x.jpg");
+    expect(coverUrl({ photo_url: null, photos: own })).toBe("/a");
+    expect(coverUrl({ photo_url: null })).toBe(null);
+  });
+});

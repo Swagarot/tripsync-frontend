@@ -39,6 +39,8 @@ export default defineConfig({
         // really reach the backend (or fail, so the sync queue knows).
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
+        // MapLibre is ~1 MB; the default precache limit is 2 MB per file.
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         runtimeCaching: [
           {
             // Map tiles: kept as they're viewed (cache first, fall back to
@@ -50,6 +52,17 @@ export default defineConfig({
               cacheName: 'osm-tiles',
               expiration: { maxEntries: 1000, maxAgeSeconds: 30 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Your own photos (signed links from the backend, stable for weeks,
+            // see photos.py): once seen, they show offline too.
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/photos/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'your-photos',
+              expiration: { maxEntries: 1000, maxAgeSeconds: 60 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {

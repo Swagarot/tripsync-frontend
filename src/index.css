@@ -1252,3 +1252,130 @@ button.icon-only {
     display: none;
   }
 }
+
+/* ---- Your memories: stars, been-here, photos ---- */
+
+.stars {
+  display: inline-flex;
+  gap: 1px;
+  color: var(--border);
+}
+.stars .on {
+  color: #e8a317;
+}
+.stars button {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--border);
+}
+.stars button.on {
+  color: #e8a317;
+}
+.stars-small {
+  font-size: 0.85rem;
+}
+.memory-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.visited-badge {
+  color: var(--ok);
+  font-weight: 600;
+}
+button.more.has-memories {
+  color: #e8a317;
+}
+.memories {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.memories-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.visited-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.visited-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+.photo-grid figure {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--border);
+}
+.photo-grid figure.cover {
+  outline: 3px solid #e8a317;
+}
+.photo-grid figure.pending img {
+  opacity: 0.55;
+}
+.photo-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.photo-grid figcaption {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: linear-gradient(transparent, rgb(0 0 0 / 55%));
+  color: #fff;
+}
+.photo-grid figcaption button {
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  background: rgb(255 255 255 / 85%);
+  color: #1d1c1a;
+  border: none;
+}
+.photo-grid figcaption button[aria-pressed="true"] {
+  background: #e8a317;
+  color: #fff;
+}
+.add-photo {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-style: dashed;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.add-photo span {
+  font-size: 1.4rem;
+}

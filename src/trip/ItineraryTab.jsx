@@ -28,6 +28,8 @@ import { centerOf, distanceKm, formatDistance, formatDuration } from "../geo.js"
 import { op } from "../store/ops.js";
 import { dispatch } from "../store/store.js";
 import { categoryIcon } from "./categories.js";
+import Memories, { Stars } from "./Memories.jsx";
+import { coverUrl } from "./photos.js";
 import { useTripView } from "./context.js";
 import { describe as describeWeather } from "./weather.js";
 
@@ -316,6 +318,7 @@ function Day({ day, index, days, near }) {
 function Stop({ stop, index, day, days, previous, leg }) {
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [memories, setMemories] = useState(false);
   const { highlight, setHighlight } = useTripView();
   const tripId = day.trip_id;
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
@@ -360,6 +363,12 @@ function Stop({ stop, index, day, days, previous, leg }) {
           <a className="stop-name" href={mapsUrl(stop)} target="_blank" rel="noreferrer">
             {stop.name}
           </a>
+          {(stop.rating || stop.visited) && (
+            <p className="memory-line small">
+              {stop.rating ? <Stars value={stop.rating} size="small" /> : null}
+              {stop.visited && <span className="visited-badge">✓ Been here</span>}
+            </p>
+          )}
           <p className="muted small">{[stop.time, stop.category, stop.address].filter(Boolean).join(" · ")}</p>
           {stop.opening_hours && <p className="small hours">Hours: {stop.opening_hours}</p>}
           {stop.notes && <p className="notes small">{stop.notes}</p>}
@@ -369,6 +378,18 @@ function Stop({ stop, index, day, days, previous, leg }) {
             </a>
           )}
         </div>
+        <button
+          className={`more${stop.rating || stop.photos?.length ? " has-memories" : ""}`}
+          aria-label={`Rate ${stop.name} and add photos`}
+          aria-expanded={memories}
+          title="Rate & photos"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMemories((m) => !m);
+          }}
+        >
+          {stop.photos?.length ? "📷" : "☆"}
+        </button>
         <button
           className="more"
           aria-label={`${stop.name} actions`}
@@ -418,6 +439,7 @@ function Stop({ stop, index, day, days, previous, leg }) {
           </button>
         </div>
         )}
+        {memories && <Memories stop={stop} tripId={tripId} />}
       </li>
     </>
   );
@@ -428,8 +450,8 @@ function Stop({ stop, index, day, days, previous, leg }) {
 export function Thumb({ place, number }) {
   return (
     <div className="thumb">
-      {place.photo_url ? (
-        <img src={place.photo_url} alt="" loading="lazy" />
+      {coverUrl(place) ? (
+        <img src={coverUrl(place)} alt="" loading="lazy" />
       ) : (
         <span className="thumb-icon" aria-hidden="true">
           {categoryIcon(place.category)}
