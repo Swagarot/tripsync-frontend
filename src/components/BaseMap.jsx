@@ -11,7 +11,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // us its URL (MapLibre loads it in a web worker when needed).
 import rtlPluginUrl from "../../node_modules/@mapbox/mapbox-gl-rtl-text/dist/mapbox-gl-rtl-text.js?url";
 import { useEffect, useRef } from "react";
-import { useMap } from "react-leaflet";
+import { TileLayer, useMap } from "react-leaflet";
+import { ATTRIBUTION as OSM_ATTRIBUTION, TILE_URL as OSM_TILES } from "./map.js";
 import { useLanguage } from "../settings.js";
 
 // The map's background, drawn in the browser from vector tiles
@@ -63,7 +64,38 @@ function applyLanguage(glMap, lang) {
   }
 }
 
+// MapLibre draws with WebGL2 (the browser's GPU graphics). Some computers
+// don't offer it: graphics acceleration switched off in the browser, or a GPU
+// driver the browser has blocked. Then the vector map can't start at all, so
+// fall back to OpenStreetMap's ready-made picture tiles: everything works,
+// only the labels stay in the local language.
+let webgl2Supported = null;
+function supportsWebGL2() {
+  if (webgl2Supported === null) {
+    try {
+      webgl2Supported = !!document.createElement("canvas").getContext("webgl2");
+    } catch {
+      webgl2Supported = false;
+    }
+  }
+  return webgl2Supported;
+}
+
 export default function BaseMap() {
+  return supportsWebGL2() ? <VectorBaseMap /> : <RasterFallback />;
+}
+
+function RasterFallback() {
+  return (
+    <TileLayer
+      url={OSM_TILES}
+      noWrap
+      attribution={`${OSM_ATTRIBUTION} · basic map: this browser has WebGL2 off, so labels stay in the local language`}
+    />
+  );
+}
+
+function VectorBaseMap() {
   const map = useMap();
   const lang = useLanguage();
   const layerRef = useRef(null);
