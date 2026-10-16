@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, useNavigate, useParams } from "react-router";
 import AppMenu from "../components/AppMenu.jsx";
 import { TripForm } from "../components/forms.jsx";
+import { HomeIcon } from "../components/icons.jsx";
 import PlaceSearch from "../components/PlaceSearch.jsx";
 import { addDays, formatDay, formatRange } from "../dates.js";
 import { centerOf } from "../geo.js";
@@ -210,14 +211,19 @@ export default function TripPage() {
           addLabel="Add"
           onAdd={quickAdd}
           leading={
-            <button
-              className="icon-btn menu-btn"
-              aria-label={open ? "Close trip panel" : "Open trip panel"}
-              aria-expanded={open}
-              onClick={() => setOpen((o) => !o)}
-            >
-              ☰
-            </button>
+            <>
+              <button
+                className="icon-btn menu-btn"
+                aria-label={open ? "Close trip panel" : "Open trip panel"}
+                aria-expanded={open}
+                onClick={() => setOpen((o) => !o)}
+              >
+                ☰
+              </button>
+              <Link to="/" className="icon-btn home-btn" aria-label="All trips" title="All trips">
+                <HomeIcon />
+              </Link>
+            </>
           }
         />
         <Drawer trip={trip} tab={tab} setTab={setTab} badDays={badDays} open={open} setOpen={setOpen}>
@@ -313,6 +319,9 @@ function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
       </div>
 
       <header className="drawer-head">
+        <Link to="/" className="icon-btn home-btn" aria-label="All trips" title="All trips">
+          <HomeIcon />
+        </Link>
         <div className="panel-title">
           <h1>{trip.name}</h1>
           <p className="muted small">

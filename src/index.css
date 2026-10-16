@@ -1737,3 +1737,19 @@ textarea::placeholder {
 .stay-icon {
   font-size: 1.1rem;
 }
+
+/* Home (all trips): in the search bar next to ☰, and at the top of the drawer. */
+.home-btn {
+  display: inline-grid;
+  place-items: center;
+  color: var(--text);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.drawer-head .home-btn {
+  align-self: flex-start;
+  margin: 2px -4px 0 -8px;
+}
+.drawer-head .panel-title {
+  flex: 1;
+}

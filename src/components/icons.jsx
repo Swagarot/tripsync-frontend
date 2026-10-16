@@ -50,3 +50,11 @@ export const GripIcon = () => (
     {[3, 9, 15].flatMap((y) => [<circle key={`a${y}`} cx="4" cy={y} r="1.6" />, <circle key={`b${y}`} cx="10" cy={y} r="1.6" />])}
   </svg>
 );
+
+// A house: back to the list of all trips.
+export const HomeIcon = () => (
+  <Icon>
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 9.5V21h5v-6h4v6h5V9.5" />
+  </Icon>
+);
