@@ -1,35 +1,78 @@
-import { useState, useEffect } from "react";
-// useState: lets this component hold data that can change over time
-//           (here: the health status we get back from Flask)
-// useEffect: lets us run code when the component first loads
-//            (here: fire off the fetch to Flask as soon as the page opens)
+import { Link, Navigate, Route, Routes } from "react-router";
+import { useAuth } from "./auth/context.js";
+import { SyncBar, UpdateBanner } from "./components/common.jsx";
+import LoginPage from "./pages/LoginPage.jsx";
+import TripPage from "./pages/TripPage.jsx";
+import TripsPage from "./pages/TripsPage.jsx";
+import { useSyncStatus } from "./store/hooks.js";
 
-function App() {
-  const [status, setStatus] = useState("loading...");
-  // status starts as "loading..." until the fetch below finishes,
-  // then setStatus updates it — React automatically re-renders when it changes
+// Pages that need a logged-in user. While the stored token is still being
+// checked (user === undefined) show nothing instead of flashing the login page.
+function RequireLogin({ children }) {
+  const { user } = useAuth();
+  if (user === undefined) return <p className="muted center">Loading…</p>;
+  if (user === null) return <Navigate to="/login" replace />;
+  return children;
+}
 
-  useEffect(() => {
-    fetch("/api/health") // make a GET request to Flask's /api/health endpoint
-      .then((response) => response.json()) // parse the JSON body Flask sent back
-      .then((data) => setStatus(data.status)) // pull out {"status": "ok"} -> "ok"
-      .catch((error) => {
-       console.error("Health check failed:", error);
-       setStatus("error: backend unreachable");
-      });
-      
-      // if Flask isn't running, or CORS blocks it (more on that below),
-      // this catches it so the page doesn't just silently break
-  }, []); // the empty [] means "only run this once, when the page first loads"
-          // — without it, this would refetch on every re-render, in a loop
+function Header() {
+  const { user, logout } = useAuth();
+  const { pending } = useSyncStatus();
+  if (!user) return null;
 
-          
+  // Logging out wipes this device's copy, including changes not yet synced.
+  const confirmLogout = () => {
+    if (pending === 0 || window.confirm(`${pending} change(s) haven't synced yet and will be lost. Log out anyway?`)) {
+      logout();
+    }
+  };
+
   return (
-    <div>
-      <h1>TripSync</h1>
-      <p>Backend status: {status}</p>
-    </div>
+    <header className="app-header">
+      <Link to="/" className="brand">
+        <span aria-hidden="true">✈</span> TripSync
+      </Link>
+      <div className="account">
+        <span className="muted small email">{user.email}</span>
+        <button className="link" onClick={confirmLogout}>
+          Log out
+        </button>
+      </div>
+    </header>
   );
 }
 
-export default App;
+export default function App() {
+  // The URL decides which page shows. nginx's try_files (and, offline, the
+  // service worker) send every unknown path to index.html, so reloading
+  // /trips/<id> still lands here.
+  return (
+    <div className="app">
+      <div className="top">
+        <Header />
+        <SyncBar />
+        <UpdateBanner />
+      </div>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <RequireLogin>
+              <TripsPage />
+            </RequireLogin>
+          }
+        />
+        <Route
+          path="/trips/:tripId"
+          element={
+            <RequireLogin>
+              <TripPage />
+            </RequireLogin>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
+  );
+}

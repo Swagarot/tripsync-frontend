@@ -1,16 +1,27 @@
-# React + Vite
+# tripsync-frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React (Vite) single-page app for TripSync, served by nginx in its container.
+Deployed by this repo's Jenkinsfile with the Helm chart from `tripsync-devops`.
 
-Currently, two official plugins are available:
+## Layout
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Path | What |
+|---|---|
+| `src/api.js` | The only place that calls the backend (`/api/...`, adds the token) |
+| `src/auth/` | Logged-in user state (`AuthProvider`, `useAuth`) |
+| `src/pages/` | `LoginPage`, `TripsPage` (list), `TripPage` (days and stops) |
+| `src/components/` | Forms, icons, error message, server status |
+| `nginx.conf` | Serves the build; unknown paths fall back to `index.html` |
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```sh
+npm ci
+npm run dev      # http://localhost:5173, proxies /api to Flask on :5000 (vite.config.js)
+npm run lint
+npm run build
+```
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Start the backend first (`python app.py` in `tripsync-backend`), or run the
+whole stack with `docker compose up --build` in `tripsync-devops`
+(http://localhost:8080).

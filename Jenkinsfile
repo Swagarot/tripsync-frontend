@@ -65,7 +65,7 @@ pipeline {
                         // npm ci installs exactly what package-lock.json says.
                         sh '''
                             docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp \
-                              -v "$PWD/frontend:/src" -w /src node:20-alpine \
+                              -v "$PWD/frontend:/src" -w /src node:24-alpine \
                               sh -c "npm ci && npm run lint"
                         '''
                     }
@@ -73,7 +73,22 @@ pipeline {
             }
         }
 
-        // Unit tests (Jest) go here in Week 7.
+        stage('Unit tests') {
+            steps {
+                // Vitest (same API as Jest, but reuses vite.config.js, so no
+                // separate Babel setup). The ESLint stage's `npm ci` already
+                // filled frontend/node_modules in the workspace, so this only
+                // runs the tests. JUnit XML shows results on the build page.
+                sh '''
+                    docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp                       -v "$PWD/frontend:/src" -w /src node:24-alpine                       npx vitest run --reporter=default --reporter=junit --outputFile.junit=test-results.xml
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'frontend/test-results.xml'
+                }
+            }
+        }
 
         stage('Set image tag') {
             steps {
@@ -138,6 +153,8 @@ pipeline {
                                 // touched. It holds no secret: kubectl/helm run
                                 // 'aws eks get-token' with the keys above.
                                 // On EKS the release is stored in 'tripsync'.
+                                // Postgres's disk is a gp3 EBS volume there
+                                // (StorageClass made by terraform/aws), not Longhorn.
                                 sh '''
                                     export AWS_DEFAULT_REGION=eu-central-1
                                     export KUBECONFIG="$WORKSPACE/kubeconfig-eks"
@@ -146,6 +163,7 @@ pipeline {
                                     helm upgrade --install tripsync devops/k8s-helm/tripsync -n tripsync \
                                       --reset-then-reuse-values \
                                       --set-string frontend.image.tag=$IMAGE_TAG \
+                                      --set postgres.storageClassName=gp3 \
                                       --atomic --timeout 3m
                                     kubectl get pods -n tripsync
                                 '''

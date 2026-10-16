@@ -1,6 +1,8 @@
 # ---- Stage 1: build the React app ----
 # "AS build" names this stage so we can reference it later in Stage 2
-FROM node:20-alpine AS build
+# Node 24 = current LTS (Node 20 reached end of life in April 2026, and Vite 8
+# needs a newer Node anyway). Same version as the Jenkins ESLint stage.
+FROM node:24-alpine AS build
 
 WORKDIR /app
 
@@ -8,7 +10,9 @@ WORKDIR /app
 # first, install, THEN copy the rest of the source. Docker only re-runs
 # npm install when package.json actually changes, not on every code edit.
 COPY package.json package-lock.json ./
-RUN npm install
+# npm ci installs exactly what package-lock.json says (npm install may
+# resolve newer versions), so every build gets the same dependencies.
+RUN npm ci
 
 # Now copy the actual source code and build it
 COPY . .
