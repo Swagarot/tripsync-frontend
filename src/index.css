@@ -1594,3 +1594,11 @@ button.more.has-memories {
 :root[data-theme="dim"] .raster-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.85) sepia(0.25) hue-rotate(170deg) saturate(0.8);
 }
+
+/* Phones: the search bar spans the whole top, so the map's +/- buttons go
+   just below it. */
+@media (max-width: 899px) {
+  .trip-screen .leaflet-top {
+    top: 60px;
+  }
+}

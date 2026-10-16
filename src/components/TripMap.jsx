@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo } from "react";
-import { MapContainer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Tooltip, useMap, ZoomControl } from "react-leaflet";
 import { dayColor } from "../colors.js";
 import { distanceKm } from "../geo.js";
 import { useTripView } from "../trip/context.js";
@@ -50,7 +50,7 @@ const WORLD_EDGES = [[-85, -200], [85, 200]];
 // All stops with coordinates: one colour per day, numbered in visiting order,
 // lines between them. Plus, while searching, the results as small grey pins.
 export default function TripMap({ days, trip }) {
-  const { highlight, focus, preview, routeFor } = useTripView();
+  const { highlight, focus, preview, routeFor, side } = useTripView();
 
   const routes = useMemo(
     () =>
@@ -75,7 +75,12 @@ export default function TripMap({ days, trip }) {
       maxBoundsViscosity={1}
       className="map"
       scrollWheelZoom
+      zoomControl={false}
     >
+      {/* +/- on the side away from the search bar and drawer (Leaflet's
+          default top-left is under the search bar). key: Leaflet only reads
+          the position once, so remount it when the side flips (Hebrew). */}
+      <ZoomControl key={side} position={side === "right" ? "topleft" : "topright"} />
       <BaseMap />
       {/* While searching, fit the results; otherwise the trip's stops; otherwise its destination. */}
       <FitTo
