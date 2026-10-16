@@ -77,7 +77,23 @@ export default function TripMap({ days, trip }) {
           {/* The real route when loaded, else dashed straight lines. Different
               keys on purpose: Leaflet keeps a line's old dash pattern when only
               its style changes, so the route must be a new line, not an update. */}
-          {routeFor(day) ? (
+          {routeFor(day)?.parts ? (
+            // Transit: each part separately. Rides in the line's own colour,
+            // walks as dots, legs without a journey as dashed straight lines.
+            routeFor(day).parts.map((part, i) => (
+              <Polyline
+                key={`part-${i}-${part.mode}`}
+                positions={part.points}
+                pathOptions={
+                  part.mode === "WALK"
+                    ? { color: "#6b675f", weight: 3, opacity: 0.8, dashArray: "1 6", lineCap: "round" }
+                    : part.mode === "NONE"
+                      ? { color, weight: 3, opacity: 0.6, dashArray: "6 6" }
+                      : { color: part.color ?? color, weight: 6, opacity: 0.9 }
+                }
+              />
+            ))
+          ) : routeFor(day) ? (
             <Polyline key="route" positions={routeFor(day).geometry} pathOptions={{ color, weight: 5, opacity: 0.8 }} />
           ) : (
             stops.length > 1 && (

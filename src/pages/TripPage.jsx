@@ -39,13 +39,13 @@ function useRoutes(days) {
   const requests = days.map(dayRouteRequest).filter(Boolean);
   // A plain string as the effect's dependency: it only changes when some
   // day's stops or mode really change, not on every render.
-  const signature = JSON.stringify(requests.map((r) => [r.key, r.mode, r.points]));
+  const signature = JSON.stringify(requests.map((r) => [r.key, r.mode, r.points, r.date]));
 
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(async () => {
-      for (const [key, mode, points] of JSON.parse(signature)) {
-        const route = await loadRoute(mode, points);
+      for (const [key, mode, points, date] of JSON.parse(signature)) {
+        const route = await loadRoute(mode, points, date);
         if (cancelled) return;
         if (route) setRoutes((prev) => ({ ...prev, [key]: route }));
       }

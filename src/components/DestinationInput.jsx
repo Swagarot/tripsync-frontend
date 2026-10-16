@@ -25,8 +25,12 @@ export default function DestinationInput({ value, onChange }) {
       }
       try {
         const found = await api(`/places/search?${new URLSearchParams({ q })}`);
-        // Areas first: a country or city is a better "Where to?" than a shop.
-        const ranked = [...found].sort((a, b) => (a.zoom ?? 15) - (b.zoom ?? 15));
+        // Areas (countries, regions, cities, islands) before single places
+        // like a shop or a station, but otherwise keep the search's own
+        // relevance order: sorting by size would put Haneda Airport (tagged
+        // as an island in OpenStreetMap) above the city of Tokyo.
+        const isArea = (r) => (r.zoom ?? 15) <= 13;
+        const ranked = [...found].sort((a, b) => isArea(b) - isArea(a));
         if (id === latest.current) setSuggestions(ranked.slice(0, 6));
       } catch {
         if (id === latest.current) setSuggestions([]);

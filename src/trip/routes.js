@@ -10,12 +10,16 @@ import { api } from "../api.js";
 const idb = createStore("tripsync-routes", "routes");
 const memory = new Map();
 
-export function routeKey(mode, points) {
-  return `${mode}|${points.map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join(";")}`;
+// "v2": routes stored by older versions are ignored. (v1 remembered "no route"
+// for stops a road couldn't be found near; the backend now searches wider.)
+// Transit depends on the date (timetables), so it's part of the key.
+export function routeKey(mode, points, date = null) {
+  const coords = points.map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join(";");
+  return `v2|${mode}|${mode === "transit" ? `${date ?? ""}|` : ""}${coords}`;
 }
 
-export async function loadRoute(mode, points) {
-  const key = routeKey(mode, points);
+export async function loadRoute(mode, points, date = null) {
+  const key = routeKey(mode, points, date);
   if (memory.has(key)) return memory.get(key);
   try {
     const stored = await get(key, idb);
@@ -28,7 +32,7 @@ export async function loadRoute(mode, points) {
   }
   let route = null;
   try {
-    route = await api("/routes", { method: "POST", body: { mode, points } });
+    route = await api("/routes", { method: "POST", body: { mode, points, ...(date ? { date } : {}) } });
   } catch (err) {
     // 422 = no route exists between these stops: remember that too, so we
     // don't spend quota asking again. Anything else: try again next time.
@@ -45,5 +49,6 @@ export function dayRouteRequest(day) {
   const points = day.stops.filter((s) => s.lat != null).map((s) => [s.lat, s.lng]);
   if (points.length < 2) return null;
   const mode = day.travel_mode ?? "walk";
-  return { dayId: day.id, mode, points, key: routeKey(mode, points) };
+  const date = mode === "transit" ? (day.date ?? null) : null;
+  return { dayId: day.id, mode, points, date, key: routeKey(mode, points, date) };
 }

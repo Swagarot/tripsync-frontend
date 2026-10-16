@@ -52,6 +52,14 @@ describe("loadRoute (protects the ~200/day routing quota)", () => {
   });
 });
 
+describe("route keys", () => {
+  it("include the date only for transit (timetables depend on it)", () => {
+    const pts = [[1, 2], [3, 4]];
+    expect(routeKey("transit", pts, "2026-10-17")).not.toBe(routeKey("transit", pts, "2026-10-18"));
+    expect(routeKey("drive", pts, "2026-10-17")).toBe(routeKey("drive", pts, "2026-10-18"));
+  });
+});
+
 describe("dayRouteRequest", () => {
   it("uses only stops with coordinates, and needs at least two", () => {
     const day = {
@@ -59,7 +67,9 @@ describe("dayRouteRequest", () => {
       travel_mode: null,
       stops: [{ lat: 1, lng: 2 }, { lat: null, lng: null }, { lat: 3, lng: 4 }],
     };
-    expect(dayRouteRequest(day)).toEqual({ dayId: "d1", mode: "walk", points: [[1, 2], [3, 4]], key: routeKey("walk", [[1, 2], [3, 4]]) });
+    expect(dayRouteRequest(day)).toEqual({
+      dayId: "d1", mode: "walk", points: [[1, 2], [3, 4]], date: null, key: routeKey("walk", [[1, 2], [3, 4]]),
+    });
     expect(dayRouteRequest({ ...day, stops: day.stops.slice(0, 2) })).toBe(null);
   });
 });

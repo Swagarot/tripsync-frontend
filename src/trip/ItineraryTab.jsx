@@ -35,8 +35,15 @@ import { describe as describeWeather } from "./weather.js";
 // places. Every change is an op (store/ops.js): dispatch() applies it on
 // screen immediately and the sync loop sends it when there's a connection.
 
-const TRAVEL_MODES = { walk: "Walk", bike: "Bike", drive: "Drive" };
-const MODE_VERB = { walk: "walk", bike: "by bike", drive: "drive" };
+const TRAVEL_MODES = { walk: "Walk", bike: "Bike", drive: "Drive", transit: "Transit" };
+const MODE_VERB = { walk: "walk", bike: "by bike", drive: "drive", transit: "by transit" };
+
+// Icons for public-transport legs (Transitous / GTFS mode names).
+const TRANSIT_ICONS = {
+  SUBWAY: "🚇", METRO: "🚇", TRAM: "🚊", BUS: "🚌", COACH: "🚌", FERRY: "⛴️", AIRPLANE: "✈️",
+  RAIL: "🚆", REGIONAL_RAIL: "🚆", REGIONAL_FAST_RAIL: "🚆", HIGHSPEED_RAIL: "🚄", LONG_DISTANCE: "🚄",
+  NIGHT_RAIL: "🚆", SUBURBAN: "🚆", CABLE_CAR: "🚡", FUNICULAR: "🚞", AERIAL_LIFT: "🚡",
+};
 
 function movedIds(items, index, delta) {
   const ids = items.map((item) => item.id);
@@ -212,8 +219,11 @@ function Day({ day, index, days, near }) {
             {day.title && <p className="day-title">{day.title}</p>}
             {route && (
               <p className="muted small">
-                {formatDuration(route.duration_s)} {MODE_VERB[day.travel_mode ?? "walk"]} ·{" "}
-                {formatDistance(route.distance_m / 1000)} in total
+                {formatDuration(route.duration_s)} {MODE_VERB[day.travel_mode ?? "walk"]}
+                {route.distance_m > 0 && ` · ${formatDistance(route.distance_m / 1000)}`} in total
+                {route.planned_for && route.planned_for !== day.date && (
+                  <> · times for a typical {new Date(route.planned_for).toLocaleDateString(undefined, { weekday: "long" })}</>
+                )}
               </p>
             )}
             {warn && (
@@ -427,9 +437,24 @@ export function Thumb({ place, number }) {
 // daily quota used up).
 function Leg({ from, to, mode, leg }) {
   if (from.lat == null || to.lat == null) return null;
+  if (leg?.steps) {
+    // Public transport: time, then each ride as a badge in its line's colour.
+    return (
+      <li className="leg small">
+        <span className="leg-line" aria-hidden="true" />
+        <span className="muted">{formatDuration(leg.duration_s)}</span>
+        {leg.steps.length === 0 && <span className="muted">walk</span>}
+        {leg.steps.map((s, i) => (
+          <span key={i} className="line-badge" style={{ "--line": s.color ?? "var(--muted)" }} title={s.title || s.line}>
+            {TRANSIT_ICONS[s.mode] ?? "🚍"} {s.line}
+          </span>
+        ))}
+      </li>
+    );
+  }
   const text = leg
     ? `${formatDuration(leg.duration_s)} ${MODE_VERB[mode]} · ${formatDistance(leg.distance_m / 1000)}`
-    : `~${formatDistance(distanceKm(from, to))} straight line`;
+    : `~${formatDistance(distanceKm(from, to))} straight line${mode === "transit" ? " (no transit found)" : ""}`;
   return (
     <li className="leg muted small">
       <span className="leg-line" aria-hidden="true" />

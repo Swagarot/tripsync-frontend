@@ -1206,3 +1206,20 @@ button.icon-only {
   font-size: 1.8rem;
   line-height: 1;
 }
+
+/* A public-transport ride: icon + line name on the line's own colour. */
+.line-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--line);
+  text-shadow: 0 0 2px rgb(0 0 0 / 40%);
+}
+.leg {
+  flex-wrap: wrap;
+}
