@@ -1,10 +1,13 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { Link, Navigate, Route, Routes } from "react-router";
 import { useAuth } from "./auth/context.js";
 import { SyncBar, UpdateBanner } from "./components/common.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
-import TripPage from "./pages/TripPage.jsx";
-import TripsPage from "./pages/TripsPage.jsx";
+// Each page is its own JS file, downloaded when it's first opened: the login
+// screen no longer downloads the trip page (drag-and-drop, tabs, map glue).
+// The service worker still precaches all of them, so they work offline.
+const TripPage = lazy(() => import("./pages/TripPage.jsx"));
+const TripsPage = lazy(() => import("./pages/TripsPage.jsx"));
 import { LANGUAGES, setLanguage, useLanguage } from "./settings.js";
 import { useSyncStatus } from "./store/hooks.js";
 
@@ -88,6 +91,7 @@ export default function App() {
         <SyncBar />
         <UpdateBanner />
       </div>
+      <Suspense fallback={<p className="muted center">Loading…</p>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
@@ -108,6 +112,7 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </div>
   );
 }

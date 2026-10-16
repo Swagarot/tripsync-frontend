@@ -9,10 +9,10 @@ import { useTripView } from "../trip/context.js";
 // website, from /places/<ref>) -> add it to the day.
 // Results are biased towards `near` (the middle of the trip's stops), so
 // "cathedral" finds the one in the city being planned.
-export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
+export default function PlaceSearch({ near, onAdd, onCustom, onCancel, initialQuery = "", addLabel = "Add to day" }) {
   const { online } = useStore();
   const { setPreview } = useTripView();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
@@ -121,7 +121,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
       {error && <p className="error">{error.message}</p>}
 
       {selected ? (
-        <PlaceCard selected={selected} adding={adding} onAdd={add} onBack={() => setSelected(null)} />
+        <PlaceCard selected={selected} adding={adding} addLabel={addLabel} onAdd={add} onBack={() => setSelected(null)} />
       ) : (
         <>
           {searching && <p className="muted small">Searching…</p>}
@@ -138,9 +138,11 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
               </li>
             ))}
           </ul>
-          <button className="link small" onClick={onCustom}>
-            Can't find it? Add a stop by hand
-          </button>
+          {onCustom && (
+            <button className="link small" onClick={onCustom}>
+              Can't find it? Add a stop by hand
+            </button>
+          )}
         </>
       )}
       <p className="attribution">
@@ -151,7 +153,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
   );
 }
 
-function PlaceCard({ selected, adding, onAdd, onBack }) {
+function PlaceCard({ selected, adding, addLabel, onAdd, onBack }) {
   const { result, details, loading } = selected;
   const place = { ...result, ...(details ?? {}) };
   const facts = [
@@ -196,7 +198,7 @@ function PlaceCard({ selected, adding, onAdd, onBack }) {
         )}
         <div className="form-actions">
           <button className="primary" onClick={onAdd} disabled={adding}>
-            {adding ? "Adding…" : "Add to day"}
+            {adding ? "Saving…" : addLabel}
           </button>
           <button onClick={onBack}>Back to results</button>
         </div>

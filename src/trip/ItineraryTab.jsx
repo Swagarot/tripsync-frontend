@@ -319,12 +319,33 @@ function Stop({ stop, index, day, days, previous, leg }) {
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
   const [memories, setMemories] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
   const { highlight, setHighlight } = useTripView();
   const tripId = day.trip_id;
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: stop.id,
   });
   const style = { transform: CSS.Transform.toString(transform), transition };
+
+  if (lookingUp) {
+    // A stop typed in by hand (often offline, where search can't work): find
+    // the real place now and copy its details (photo, hours, exact position)
+    // onto the stop. Your rating, photos and notes stay.
+    return (
+      <li ref={setNodeRef} style={style} className="stop editing">
+        <PlaceSearch
+          initialQuery={stop.name}
+          addLabel="Use these details"
+          near={stop.lat != null ? { lat: stop.lat, lng: stop.lng } : null}
+          onCancel={() => setLookingUp(false)}
+          onAdd={async (fields) => {
+            await dispatch(op.updateStop(tripId, stop.id, fields));
+            setLookingUp(false);
+          }}
+        />
+      </li>
+    );
+  }
 
   if (editing) {
     return (
@@ -426,6 +447,11 @@ function Stop({ stop, index, day, days, previous, leg }) {
                 ),
               )}
             </select>
+          )}
+          {!stop.osm_ref && (
+            <button onClick={() => setLookingUp(true)} title="Find this place to add its photo, hours and position">
+              🔎 Find place details
+            </button>
           )}
           <button aria-label="Edit stop" onClick={() => setEditing(true)}>
             <EditIcon />
