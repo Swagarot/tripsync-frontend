@@ -38,6 +38,14 @@ import { describe as describeWeather } from "./weather.js";
 const TRAVEL_MODES = { walk: "Walk", bike: "Bike", drive: "Drive", transit: "Transit" };
 const MODE_VERB = { walk: "walk", bike: "by bike", drive: "drive", transit: "by transit" };
 
+// Plain names for public-transport modes (Transitous / GTFS mode names).
+const TRANSIT_NAMES = {
+  SUBWAY: "Subway", METRO: "Metro", TRAM: "Tram", BUS: "Bus", COACH: "Coach", FERRY: "Ferry",
+  AIRPLANE: "Flight", RAIL: "Train", REGIONAL_RAIL: "Train", REGIONAL_FAST_RAIL: "Express train",
+  HIGHSPEED_RAIL: "High-speed train", LONG_DISTANCE: "Long-distance train", NIGHT_RAIL: "Night train",
+  SUBURBAN: "Suburban train", CABLE_CAR: "Cable car", FUNICULAR: "Funicular", AERIAL_LIFT: "Cable car",
+};
+
 // Icons for public-transport legs (Transitous / GTFS mode names).
 const TRANSIT_ICONS = {
   SUBWAY: "🚇", METRO: "🚇", TRAM: "🚊", BUS: "🚌", COACH: "🚌", FERRY: "⛴️", AIRPLANE: "✈️",
@@ -438,17 +446,35 @@ export function Thumb({ place, number }) {
 function Leg({ from, to, mode, leg }) {
   if (from.lat == null || to.lat == null) return null;
   if (leg?.steps) {
-    // Public transport: time, then each ride as a badge in its line's colour.
+    // Public transport: total time, then one line per ride: badge in the
+    // line's colour, what it is, and where to get on and off.
     return (
-      <li className="leg small">
+      <li className="leg transit-leg small">
         <span className="leg-line" aria-hidden="true" />
-        <span className="muted">{formatDuration(leg.duration_s)}</span>
-        {leg.steps.length === 0 && <span className="muted">walk</span>}
-        {leg.steps.map((s, i) => (
-          <span key={i} className="line-badge" style={{ "--line": s.color ?? "var(--muted)" }} title={s.title || s.line}>
-            {TRANSIT_ICONS[s.mode] ?? "🚍"} {s.line}
+        <div className="transit-rides">
+          <span className="muted">
+            {formatDuration(leg.duration_s)} by public transport
+            {leg.transfers > 0 && ` · ${leg.transfers} change${leg.transfers > 1 ? "s" : ""}`}
           </span>
-        ))}
+          {leg.steps.length === 0 && <span className="muted">Walk the whole way</span>}
+          {leg.steps.map((s, i) => (
+            <div key={i} className="ride" title={s.title || s.line}>
+              <span className="line-badge" style={{ "--line": s.color ?? "var(--muted)" }}>
+                {TRANSIT_ICONS[s.mode] ?? "🚍"} {s.line}
+              </span>
+              <span>
+                {TRANSIT_NAMES[s.mode] ?? "Transit"}
+                {s.from && s.to && (
+                  <span className="muted">
+                    {" "}
+                    · {s.from} → {s.to}
+                  </span>
+                )}
+                {s.minutes > 0 && <span className="muted"> · {s.minutes} min</span>}
+              </span>
+            </div>
+          ))}
+        </div>
       </li>
     );
   }

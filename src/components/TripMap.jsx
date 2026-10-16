@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useMemo } from "react";
-import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
 import { dayColor } from "../colors.js";
 import { distanceKm } from "../geo.js";
 import { useTripView } from "../trip/context.js";
-import { ATTRIBUTION, pin, TILE_URL } from "./map.js";
+import BaseMap from "./BaseMap.jsx";
+import { pin } from "./map.js";
 
 // Zooms the map to fit `points` whenever the set of points changes (not on
 // every render, so it doesn't fight the user's own panning). With no points,
@@ -66,7 +67,7 @@ export default function TripMap({ days, trip }) {
       className="map"
       scrollWheelZoom
     >
-      <TileLayer url={TILE_URL} attribution={ATTRIBUTION} noWrap />
+      <BaseMap />
       {/* While searching, fit the results; otherwise the trip's stops; otherwise its destination. */}
       <FitTo
         points={previewPoints.length ? previewPoints : stopPoints}

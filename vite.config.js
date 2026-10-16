@@ -53,6 +53,17 @@ export default defineConfig({
             },
           },
           {
+            // The vector map (OpenFreeMap): style, tiles, fonts and icons.
+            // Kept as viewed, so maps you've looked at also work offline.
+            urlPattern: /^https:\/\/tiles\.openfreemap\.org\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'openfreemap',
+              expiration: { maxEntries: 3000, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             // Place photos (Wikipedia / Wikimedia Commons), same idea: once
             // seen, they show offline too.
             urlPattern: /^https:\/\/(upload|thumb|commons)\.wikimedia\.org\//,
@@ -67,6 +78,11 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // MapLibre (the vector map, ~1 MB, ~280 kB gzipped) is the one big chunk.
+    // It's only loaded on the trip page and cached by the service worker.
+    chunkSizeWarningLimit: 1100,
+  },
   server: {
     // `npm run dev` only: forward /api/... to Flask on port 5000 (python
     // app.py) and drop the /api prefix, the same thing the Ingress does in

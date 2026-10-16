@@ -57,6 +57,8 @@ describe("route keys", () => {
     const pts = [[1, 2], [3, 4]];
     expect(routeKey("transit", pts, "2026-10-17")).not.toBe(routeKey("transit", pts, "2026-10-18"));
     expect(routeKey("drive", pts, "2026-10-17")).toBe(routeKey("drive", pts, "2026-10-18"));
+    expect(routeKey("transit", pts, "2026-10-17", "en")).not.toBe(routeKey("transit", pts, "2026-10-17", "fr"));
+    expect(routeKey("walk", pts, null, "en")).toBe(routeKey("walk", pts, null, "fr"));
   });
 });
 
@@ -68,7 +70,7 @@ describe("dayRouteRequest", () => {
       stops: [{ lat: 1, lng: 2 }, { lat: null, lng: null }, { lat: 3, lng: 4 }],
     };
     expect(dayRouteRequest(day)).toEqual({
-      dayId: "d1", mode: "walk", points: [[1, 2], [3, 4]], date: null, key: routeKey("walk", [[1, 2], [3, 4]]),
+      dayId: "d1", mode: "walk", points: [[1, 2], [3, 4]], date: null, lang: "en", key: routeKey("walk", [[1, 2], [3, 4]]),
     });
     expect(dayRouteRequest({ ...day, stops: day.stops.slice(0, 2) })).toBe(null);
   });

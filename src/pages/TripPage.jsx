@@ -11,6 +11,7 @@ import ExpensesTab from "../trip/ExpensesTab.jsx";
 import IdeasTab from "../trip/IdeasTab.jsx";
 import ItineraryTab from "../trip/ItineraryTab.jsx";
 import NotesTab from "../trip/NotesTab.jsx";
+import { useLanguage } from "../settings.js";
 import { dayRouteRequest, loadRoute } from "../trip/routes.js";
 import { cellKey, dayLocation, dayWeather, loadForecast } from "../trip/weather.js";
 import WeatherTab from "../trip/WeatherTab.jsx";
@@ -36,16 +37,17 @@ const isDesktop = () => window.matchMedia("(min-width: 900px)").matches;
 // hands out a route that matches the day's CURRENT stops and mode.
 function useRoutes(days) {
   const [routes, setRoutes] = useState({});
-  const requests = days.map(dayRouteRequest).filter(Boolean);
+  const lang = useLanguage();
+  const requests = days.map((d) => dayRouteRequest(d, lang)).filter(Boolean);
   // A plain string as the effect's dependency: it only changes when some
   // day's stops or mode really change, not on every render.
-  const signature = JSON.stringify(requests.map((r) => [r.key, r.mode, r.points, r.date]));
+  const signature = JSON.stringify(requests.map((r) => [r.key, r.mode, r.points, r.date, r.lang]));
 
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(async () => {
-      for (const [key, mode, points, date] of JSON.parse(signature)) {
-        const route = await loadRoute(mode, points, date);
+      for (const [key, mode, points, date, language] of JSON.parse(signature)) {
+        const route = await loadRoute(mode, points, date, language);
         if (cancelled) return;
         if (route) setRoutes((prev) => ({ ...prev, [key]: route }));
       }
@@ -58,11 +60,11 @@ function useRoutes(days) {
 
   return useCallback(
     (day) => {
-      const request = dayRouteRequest(day);
+      const request = dayRouteRequest(day, lang);
       const route = request && routes[request.key];
       return route && !route.none ? route : null;
     },
-    [routes],
+    [routes, lang],
   );
 }
 

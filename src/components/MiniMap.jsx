@@ -3,6 +3,9 @@ import { TILE_URL } from "./map.js";
 
 // A small, non-interactive map for a trip card: the trip's places as dots,
 // joined in visiting order. Falls back to the destination, else nothing.
+// Uses OpenStreetMap's ready-made picture tiles, not the vector base map:
+// each vector map needs its own WebGL context, browsers allow only ~16, and a
+// page of trip cards would run out. Labels barely matter at this size.
 export default function MiniMap({ points, destination }) {
   const interaction = {
     zoomControl: false,

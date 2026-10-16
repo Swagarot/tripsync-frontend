@@ -1,5 +1,6 @@
-import { MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
-import { ATTRIBUTION, pin, TILE_URL } from "./map.js";
+import { MapContainer, Marker, useMapEvents } from "react-leaflet";
+import BaseMap from "./BaseMap.jsx";
+import { pin } from "./map.js";
 
 function ClickHandler({ onPick }) {
   useMapEvents({
@@ -20,7 +21,7 @@ export default function MapPicker({ value, near, onPick }) {
 
   return (
     <MapContainer center={center} zoom={zoom} className="map map-picker">
-      <TileLayer url={TILE_URL} attribution={ATTRIBUTION} />
+      <BaseMap />
       <ClickHandler onPick={onPick} />
       {value && <Marker position={value} icon={pin("•", "var(--accent)")} />}
     </MapContainer>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
+import { getLanguage } from "../settings.js";
 import { useStore } from "../store/hooks.js";
 import { useTripView } from "../trip/context.js";
 
@@ -35,7 +36,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
       }
       setSearching(true);
       setError(null);
-      const params = new URLSearchParams({ q });
+      const params = new URLSearchParams({ q, lang: getLanguage() });
       if (nearLat != null) {
         params.set("lat", nearLat.toFixed(3));
         params.set("lng", nearLng.toFixed(3));
@@ -61,7 +62,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
   async function pick(result) {
     // Details are a bonus: if they fail, the place can still be added from
     // the search result alone (hence the catch -> null).
-    const details = api(`/places/${result.osm_ref}`).catch(() => null);
+    const details = api(`/places/${result.osm_ref}?lang=${getLanguage()}`).catch(() => null);
     setSelected({ result, details: null, loading: true, pending: details });
     const loaded = await details;
     setSelected((s) => (s?.result === result ? { ...s, details: loaded, loading: false } : s));

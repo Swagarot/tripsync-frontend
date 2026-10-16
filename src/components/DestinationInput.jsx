@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
+import { getLanguage } from "../settings.js";
 
 // "Where to?": a text box that suggests places (countries, cities, regions)
 // from the backend's place search as you type. Picking one gives the trip a
@@ -24,7 +25,7 @@ export default function DestinationInput({ value, onChange }) {
         return;
       }
       try {
-        const found = await api(`/places/search?${new URLSearchParams({ q })}`);
+        const found = await api(`/places/search?${new URLSearchParams({ q, lang: getLanguage() })}`);
         // Areas (countries, regions, cities, islands) before single places
         // like a shop or a station, but otherwise keep the search's own
         // relevance order: sorting by size would put Haneda Airport (tagged
