@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { parseCoordinates } from "../coords.js";
+import DestinationInput from "./DestinationInput.jsx";
 
 // Loaded on demand, like the trip map (Leaflet is large).
 const MapPicker = lazy(() => import("./MapPicker.jsx"));
@@ -57,21 +58,40 @@ export function TripForm({ trip, onSubmit, onCancel, submitLabel = "Save" }) {
     end_date: trip?.end_date,
     notes: trip?.notes,
   });
+  const [destination, setDestination] = useState({
+    destination: trip?.destination ?? null,
+    dest_lat: trip?.dest_lat ?? null,
+    dest_lng: trip?.dest_lng ?? null,
+    dest_zoom: trip?.dest_zoom ?? null,
+  });
   const [busy, handle] = useSubmit(onSubmit);
+
+  // No name typed? "Trip to Japan" from the destination, like Wanderlog.
+  const autoName = destination.destination ? `Trip to ${destination.destination}` : "";
 
   const submit = (e) =>
     handle(e, {
-      name: values.name?.trim() ?? "",
+      name: (values.name?.trim() || autoName).slice(0, 200),
       start_date: values.start_date || null,
       end_date: values.end_date || null,
       notes: orNull(values.notes),
+      ...destination,
     });
 
   return (
     <form className="form" onSubmit={submit}>
       <label>
-        Trip name
-        <input required maxLength={200} placeholder="Japan in spring" {...bind("name")} />
+        Where to?
+        <DestinationInput value={destination} onChange={setDestination} />
+      </label>
+      <label>
+        Trip name {autoName && <span className="hint">optional</span>}
+        <input
+          required={!autoName}
+          maxLength={200}
+          placeholder={autoName || "Japan in spring"}
+          {...bind("name")}
+        />
       </label>
       <div className="form-row">
         <label>

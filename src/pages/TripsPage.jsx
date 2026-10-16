@@ -63,7 +63,10 @@ export default function TripsPage() {
           <li key={trip.id}>
             <Link to={`/trips/${trip.id}`} className="card trip-card">
               <span className="trip-name">{trip.name}</span>
-              <span className="muted">{formatRange(trip.start_date, trip.end_date)}</span>
+              <span className="muted">
+                {trip.destination && trip.destination !== trip.name.replace(/^Trip to /, "") && `${trip.destination} · `}
+                {formatRange(trip.start_date, trip.end_date)}
+              </span>
             </Link>
           </li>
         ))}

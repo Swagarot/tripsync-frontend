@@ -560,14 +560,12 @@ textarea {
 }
 /* Wide screens: itinerary left, map right, the map stays in view. */
 @media (min-width: 1000px) {
+  /* Itinerary a fixed, readable width on the left; the map gets the rest. */
   .trip-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(480px, 720px) minmax(0, 1fr);
   }
   .itinerary {
     padding: 24px 28px 64px;
-    max-width: 760px;
-    width: 100%;
-    justify-self: end;
   }
   .map-column {
     order: 0;
@@ -677,6 +675,23 @@ textarea {
     width: 100%;
     height: 180px;
   }
+}
+.destination {
+  position: relative;
+}
+.suggestions {
+  position: absolute;
+  z-index: 1200;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 15%);
 }
 .attribution {
   font-size: 0.75rem;

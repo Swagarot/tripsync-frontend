@@ -179,6 +179,7 @@ export default function TripPage() {
               <div>
                 <h1>{trip.name}</h1>
                 <p className="muted">
+                  {trip.destination && <>{trip.destination} · </>}
                   {formatRange(trip.start_date, trip.end_date)} · {days.length} day{days.length === 1 ? "" : "s"},{" "}
                   {pinned.length} place{pinned.length === 1 ? "" : "s"} on the map
                 </p>
@@ -188,7 +189,11 @@ export default function TripPage() {
             </header>
           )}
 
-          <Itinerary trip={trip} near={centerOf(pinned)} />
+          {/* Place search looks near the trip's stops, else near its destination. */}
+          <Itinerary
+            trip={trip}
+            near={centerOf(pinned) ?? (trip.dest_lat != null ? { lat: trip.dest_lat, lng: trip.dest_lng } : null)}
+          />
 
           <button className="add-day" onClick={() => dispatch(op.createDay(trip.id, { date: suggestedDate() }))}>
             + Add day
@@ -197,7 +202,7 @@ export default function TripPage() {
 
         <aside className="map-column">
           <Suspense fallback={<div className="map map-placeholder">Loading map…</div>}>
-            <TripMap days={days} />
+            <TripMap days={days} trip={trip} />
           </Suspense>
         </aside>
       </main>
