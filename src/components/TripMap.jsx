@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo } from "react";
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { dayColor } from "../colors.js";
+import { distanceKm } from "../geo.js";
 import { useTripView } from "../trip/context.js";
 import { ATTRIBUTION, pin, TILE_URL } from "./map.js";
 
@@ -94,7 +95,23 @@ export default function TripMap({ days, trip }) {
               />
             ))
           ) : routeFor(day) ? (
-            <Polyline key="route" positions={routeFor(day).geometry} pathOptions={{ color, weight: 5, opacity: 0.8 }} />
+            <>
+              <Polyline key="route" positions={routeFor(day).geometry} pathOptions={{ color, weight: 5, opacity: 0.8 }} />
+              {/* The route starts at the road nearest each stop. Where that's
+                  more than ~30 m away (an airport, a big park), a dotted
+                  straight line shows the walk from the pin to the road. */}
+              {stops.map((stop, i) => {
+                const joined = routeFor(day).snapped?.[i];
+                if (!joined || distanceKm(stop, { lat: joined[0], lng: joined[1] }) < 0.03) return null;
+                return (
+                  <Polyline
+                    key={`walk-to-road-${stop.id}`}
+                    positions={[[stop.lat, stop.lng], joined]}
+                    pathOptions={{ color: "#6b675f", weight: 3, opacity: 0.8, dashArray: "1 7", lineCap: "round" }}
+                  />
+                );
+              })}
+            </>
           ) : (
             stops.length > 1 && (
               <Polyline

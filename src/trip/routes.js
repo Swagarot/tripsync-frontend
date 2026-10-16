@@ -10,12 +10,13 @@ import { api } from "../api.js";
 const idb = createStore("tripsync-routes", "routes");
 const memory = new Map();
 
-// "v2": routes stored by older versions are ignored. (v1 remembered "no route"
-// for stops a road couldn't be found near; the backend now searches wider.)
+// The version prefix makes routes stored by older app versions be ignored:
+// v1 remembered "no route" for stops far from a road (the backend now searches
+// wider); v2 routes lack `snapped` (where each stop meets the road).
 // Transit depends on the date (timetables), so it's part of the key.
 export function routeKey(mode, points, date = null) {
   const coords = points.map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join(";");
-  return `v2|${mode}|${mode === "transit" ? `${date ?? ""}|` : ""}${coords}`;
+  return `v3|${mode}|${mode === "transit" ? `${date ?? ""}|` : ""}${coords}`;
 }
 
 export async function loadRoute(mode, points, date = null) {
