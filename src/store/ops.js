@@ -45,7 +45,14 @@ export const op = {
   moveStop: (tripId, stopId, toDayId) => ({ type: "moveStop", tripId, stopId, toDayId }),
   deleteStop: (tripId, stopId) => ({ type: "deleteStop", tripId, stopId }),
   reorderStops: (tripId, dayId, ids) => ({ type: "reorderStops", tripId, dayId, ids }),
+  // Ideas, expenses, checklist: the side panel's lists. `kind` is the list
+  // name, the same word the API uses (/trips/<id>/ideas, /expenses/<id>...).
+  createItem: (kind, tripId, fields) => ({ type: "createItem", kind, tripId, itemId: newId(), fields }),
+  updateItem: (kind, tripId, itemId, fields) => ({ type: "updateItem", kind, tripId, itemId, fields }),
+  deleteItem: (kind, tripId, itemId) => ({ type: "deleteItem", kind, tripId, itemId }),
 };
+
+export const ITEM_KINDS = ["ideas", "expenses", "checklist"];
 
 // --- The API request for an op ------------------------------------------------
 
@@ -75,6 +82,12 @@ export function toRequest(o) {
       return { method: "DELETE", path: `/stops/${o.stopId}` };
     case "reorderStops":
       return { method: "PUT", path: `/days/${o.dayId}/stops/order`, body: { ids: o.ids } };
+    case "createItem":
+      return { method: "POST", path: `/trips/${o.tripId}/${o.kind}`, body: { id: o.itemId, ...o.fields } };
+    case "updateItem":
+      return { method: "PATCH", path: `/${o.kind}/${o.itemId}`, body: o.fields };
+    case "deleteItem":
+      return { method: "DELETE", path: `/${o.kind}/${o.itemId}` };
     default:
       throw new Error(`unknown op ${o.type}`);
   }
@@ -133,7 +146,17 @@ function newStop(o) {
 export function applyToTrip(trip, o) {
   if (o.type === "createTrip") {
     if (trip) return trip;
-    return { id: o.tripId, start_date: null, end_date: null, notes: null, ...o.fields, days: [] };
+    return {
+      id: o.tripId,
+      start_date: null,
+      end_date: null,
+      notes: null,
+      ...o.fields,
+      days: [],
+      ideas: [],
+      expenses: [],
+      checklist: [],
+    };
   }
   if (!trip || trip.id !== o.tripId) return trip;
 
@@ -165,6 +188,17 @@ export function applyToTrip(trip, o) {
       return mapDays(trip, (d) => ({ ...d, stops: renumber(d.stops.filter((s) => s.id !== o.stopId)) }));
     case "reorderStops":
       return mapDays(trip, (d) => (d.id === o.dayId ? { ...d, stops: reorderBy(d.stops, o.ids) } : d));
+    case "createItem": {
+      const list = trip[o.kind] ?? [];
+      if (list.some((x) => x.id === o.itemId)) return trip;
+      const item = { id: o.itemId, trip_id: trip.id, ...o.fields };
+      if (o.kind === "checklist") Object.assign(item, { done: false, position: list.length }, o.fields);
+      return { ...trip, [o.kind]: [...list, item] };
+    }
+    case "updateItem":
+      return { ...trip, [o.kind]: (trip[o.kind] ?? []).map((x) => (x.id === o.itemId ? { ...x, ...o.fields } : x)) };
+    case "deleteItem":
+      return { ...trip, [o.kind]: (trip[o.kind] ?? []).filter((x) => x.id !== o.itemId) };
     case "moveStop": {
       const stop = trip.days.flatMap((d) => d.stops).find((s) => s.id === o.stopId);
       if (!stop || stop.day_id === o.toDayId || !trip.days.some((d) => d.id === o.toDayId)) return trip;

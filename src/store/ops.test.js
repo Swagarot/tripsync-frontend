@@ -95,6 +95,37 @@ describe("idempotency (an op may be applied on top of a server copy that already
   });
 });
 
+describe("side-panel lists (ideas, expenses, checklist)", () => {
+  const create = op.createTrip({ name: "T" });
+  const id = create.tripId;
+
+  it("create / update / delete, idempotent, on trips stored before these lists existed", () => {
+    const old = { ...build(create) };
+    delete old.expenses; // a copy saved by an older version of the app
+    const add = op.createItem("expenses", id, { amount: 12, currency: "EUR", category: "food" });
+    let trip = applyToTrip(old, add);
+    expect(applyToTrip(trip, add)).toEqual(trip);
+    trip = applyToTrip(trip, op.updateItem("expenses", id, add.itemId, { amount: 15 }));
+    expect(trip.expenses.map((e) => e.amount)).toEqual([15]);
+    expect(applyToTrip(trip, op.deleteItem("expenses", id, add.itemId)).expenses).toEqual([]);
+  });
+
+  it("checklist items start unticked, at the end", () => {
+    const a = op.createItem("checklist", id, { text: "Passport" });
+    const b = op.createItem("checklist", id, { text: "Adapter" });
+    const trip = [create, a, b].reduce(applyToTrip, null);
+    expect(trip.checklist.map((c) => [c.text, c.done, c.position])).toEqual([["Passport", false, 0], ["Adapter", false, 1]]);
+  });
+
+  it("maps to the generic endpoints", () => {
+    const add = op.createItem("ideas", "t1", { name: "teamLab" });
+    expect(toRequest(add)).toEqual({ method: "POST", path: "/trips/t1/ideas", body: { id: add.itemId, name: "teamLab" } });
+    expect(toRequest(op.updateItem("checklist", "t1", "c1", { done: true }))).toEqual({
+      method: "PATCH", path: "/checklist/c1", body: { done: true },
+    });
+  });
+});
+
 describe("requests", () => {
   it("maps each op to the right endpoint", () => {
     expect(toRequest(op.moveStop("t", "s", "d"))).toEqual({ method: "PATCH", path: "/stops/s", body: { day_id: "d" } });

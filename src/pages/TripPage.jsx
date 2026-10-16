@@ -1,54 +1,39 @@
-import {
-  closestCenter,
-  DndContext,
-  pointerWithin,
-  DragOverlay,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useDroppable,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { dayColor } from "../colors.js";
-import { DayForm, StopForm, TripForm } from "../components/forms.jsx";
-import { DeleteIcon, DownIcon, EditIcon, GripIcon, UpIcon } from "../components/icons.jsx";
-import PlaceSearch from "../components/PlaceSearch.jsx";
-import { addDays, formatDay, formatRange } from "../dates.js";
-import { centerOf, distanceKm, formatDistance, formatDuration } from "../geo.js";
+import { TripForm } from "../components/forms.jsx";
+import { formatRange } from "../dates.js";
+import { centerOf } from "../geo.js";
 import { useStore, useTrip } from "../store/hooks.js";
 import { op } from "../store/ops.js";
 import { dispatch, refreshTrip } from "../store/store.js";
-import { TripViewContext, useTripView } from "../trip/context.js";
+import { TripViewContext } from "../trip/context.js";
+import ExpensesTab from "../trip/ExpensesTab.jsx";
+import IdeasTab from "../trip/IdeasTab.jsx";
+import ItineraryTab from "../trip/ItineraryTab.jsx";
+import NotesTab from "../trip/NotesTab.jsx";
 import { dayRouteRequest, loadRoute } from "../trip/routes.js";
+import { cellKey, dayLocation, dayWeather, loadForecast } from "../trip/weather.js";
+import WeatherTab from "../trip/WeatherTab.jsx";
 
-// The map (Leaflet) is a big library only this page needs, so it's loaded on
-// demand: a separate JS file, downloaded the first time a map is shown (and
-// cached by the service worker after that, so it works offline too).
+// Map-first trip page: the map fills the screen, and everything else lives in
+// a panel over it. Desktop: a frosted panel on the left (see-through until you
+// use it, can be collapsed). Phone: a bottom sheet you drag up and down.
 const TripMap = lazy(() => import("../components/TripMap.jsx"));
 
-// Layout: itinerary on the left, a big map on the right that stays in view
-// while scrolling (on phones: map on top). Every change is an op
-// (store/ops.js): dispatch() applies it on screen immediately and the sync
-// loop sends it to the server when it can.
+const TABS = [
+  ["itinerary", "Itinerary"],
+  ["ideas", "Ideas"],
+  ["expenses", "Expenses"],
+  ["notes", "Notes"],
+  ["weather", "Weather"],
+];
 
-const TRAVEL_MODES = { walk: "Walk", bike: "Bike", drive: "Drive" };
-const MODE_VERB = { walk: "walk", bike: "by bike", drive: "drive" };
+const isDesktop = () => window.matchMedia("(min-width: 900px)").matches;
 
 // Loads a route for every day with 2+ placed stops, once the stops have
 // stopped changing for a moment (dragging fires several changes in a row and
-// each route request counts against the daily quota). Returns routeFor(day),
-// which only hands out a route that matches the day's CURRENT stops and mode.
+// each route request counts against the daily quota). routeFor(day) only
+// hands out a route that matches the day's CURRENT stops and mode.
 function useRoutes(days) {
   const [routes, setRoutes] = useState({});
   const requests = days.map(dayRouteRequest).filter(Boolean);
@@ -81,40 +66,72 @@ function useRoutes(days) {
   );
 }
 
-function movedIds(items, index, delta) {
-  const ids = items.map((item) => item.id);
-  [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
-  return ids;
-}
+// Forecasts for the places the trip's dated days happen in (one request per
+// ~10 km area). weatherFor(day): undefined = nothing to show (no date, too far
+// ahead, still loading), null = the day has no location at all.
+function useWeather(trip) {
+  const [forecasts, setForecasts] = useState({});
+  const cells = [];
+  for (const day of trip?.days ?? []) {
+    const loc = day.date && dayLocation(day, trip);
+    if (loc && !cells.some((c) => cellKey(c) === cellKey(loc))) cells.push(loc);
+  }
+  const signature = JSON.stringify(cells.map((c) => [cellKey(c), c.lat, c.lng]));
 
-function mapsUrl(stop) {
-  const query = stop.lat != null ? `${stop.lat},${stop.lng}` : stop.address || stop.name;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      for (const [key, lat, lng] of JSON.parse(signature)) {
+        const days = await loadForecast({ lat, lng });
+        if (cancelled) return;
+        if (days) setForecasts((prev) => ({ ...prev, [key]: days }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [signature]);
+
+  return useCallback(
+    (day) => {
+      if (!day.date) return undefined;
+      const loc = dayLocation(day, trip);
+      if (!loc) return null;
+      const forecast = forecasts[cellKey(loc)]?.find((f) => f.date === day.date);
+      return forecast ? dayWeather(day, forecast) : undefined;
+    },
+    [forecasts, trip],
+  );
 }
 
 export default function TripPage() {
   const { tripId } = useParams();
-  const navigate = useNavigate();
   const trip = useTrip(tripId);
   const { online } = useStore();
-  const [editingTrip, setEditingTrip] = useState(false);
   const [highlight, setHighlight] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [tab, setTab] = useState("itinerary");
   const routeFor = useRoutes(trip?.days ?? []);
+  const weatherFor = useWeather(trip);
 
   // Show the stored copy right away, fetch a fresh one in the background.
   useEffect(() => {
     refreshTrip(tripId);
   }, [tripId]);
 
-  // Clicking a pin scrolls its stop into view.
-  const focus = useCallback((stopId) => {
-    setHighlight(stopId);
-    document.getElementById(`stop-${stopId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, []);
+  // Clicking a pin opens the right tab and scrolls to the stop or idea.
+  const focus = useCallback(
+    (id) => {
+      setHighlight(id);
+      if (trip?.ideas?.some((i) => i.id === id)) setTab("ideas");
+      else if (trip?.days.some((d) => d.stops.some((s) => s.id === id))) setTab("itinerary");
+      setTimeout(() => document.getElementById(`stop-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+    },
+    [trip],
+  );
   const view = useMemo(
-    () => ({ highlight, setHighlight, preview, setPreview, focus, routeFor }),
-    [highlight, preview, focus, routeFor],
+    () => ({ highlight, setHighlight, preview, setPreview, focus, routeFor, weatherFor }),
+    [highlight, preview, focus, routeFor, weatherFor],
   );
 
   if (!trip) {
@@ -134,401 +151,154 @@ export default function TripPage() {
     );
   }
 
-  const days = trip.days;
-  const pinned = days.flatMap((d) => d.stops).filter((s) => s.lat != null);
-
-  function deleteTrip() {
-    if (!window.confirm(`Delete "${trip.name}" with all its days and stops?`)) return;
-    dispatch(op.deleteTrip(trip.id));
-    navigate("/");
-  }
-
-  // New days get the next date after the last one (or the trip start), so
-  // planning a week is just clicking "Add day" seven times.
-  function suggestedDate() {
-    const last = days.at(-1)?.date;
-    if (last) return addDays(last, 1);
-    return trip.start_date ?? null;
-  }
+  const pinned = trip.days.flatMap((d) => d.stops).filter((s) => s.lat != null);
+  const near = centerOf(pinned) ?? (trip.dest_lat != null ? { lat: trip.dest_lat, lng: trip.dest_lng } : null);
+  const badDays = trip.days.filter((d) => weatherFor(d)?.warnings.some((w) => w.level === "warn")).length;
 
   return (
     <TripViewContext.Provider value={view}>
-      <main className="trip-layout">
-        <section className="itinerary">
-          <Link to="/" className="back">
-            ← All trips
-          </Link>
-
-          {editingTrip ? (
-            <div className="card">
-              <h2>Edit trip</h2>
-              <TripForm
-                trip={trip}
-                onCancel={() => setEditingTrip(false)}
-                onSubmit={async (values) => {
-                  await dispatch(op.updateTrip(trip.id, values));
-                  setEditingTrip(false);
-                }}
-              />
-              <button className="danger link" onClick={deleteTrip}>
-                Delete trip
-              </button>
-            </div>
-          ) : (
-            <header className="trip-head">
-              <div>
-                <h1>{trip.name}</h1>
-                <p className="muted">
-                  {trip.destination && <>{trip.destination} · </>}
-                  {formatRange(trip.start_date, trip.end_date)} · {days.length} day{days.length === 1 ? "" : "s"},{" "}
-                  {pinned.length} place{pinned.length === 1 ? "" : "s"} on the map
-                </p>
-                {trip.notes && <p className="notes">{trip.notes}</p>}
-              </div>
-              <button onClick={() => setEditingTrip(true)}>Edit</button>
-            </header>
-          )}
-
-          {/* Place search looks near the trip's stops, else near its destination. */}
-          <Itinerary
-            trip={trip}
-            near={centerOf(pinned) ?? (trip.dest_lat != null ? { lat: trip.dest_lat, lng: trip.dest_lng } : null)}
-          />
-
-          <button className="add-day" onClick={() => dispatch(op.createDay(trip.id, { date: suggestedDate() }))}>
-            + Add day
-          </button>
-        </section>
-
-        <aside className="map-column">
+      <main className="trip-screen">
+        <div className="map-layer">
           <Suspense fallback={<div className="map map-placeholder">Loading map…</div>}>
-            <TripMap days={days} trip={trip} />
+            <TripMap days={trip.days} trip={trip} />
           </Suspense>
-        </aside>
+        </div>
+        <Panel trip={trip} tab={tab} setTab={setTab} badDays={badDays}>
+          {tab === "itinerary" && <ItineraryTab trip={trip} near={near} />}
+          {tab === "ideas" && <IdeasTab trip={trip} near={near} />}
+          {tab === "expenses" && <ExpensesTab trip={trip} />}
+          {tab === "notes" && <NotesTab key={trip.id} trip={trip} />}
+          {tab === "weather" && <WeatherTab trip={trip} />}
+        </Panel>
       </main>
     </TripViewContext.Provider>
   );
 }
 
-// --- Drag and drop -------------------------------------------------------------
-// Each day's stop list is a sortable list (dnd-kit). A stop can be dropped on
-// another stop (takes its place) or on a day's empty area (goes to the end).
-// Dropping translates into the same ops the buttons use: reorderStops, or
-// moveStop + reorderStops for another day, so it works offline too.
+// --- The panel / bottom sheet ---------------------------------------------------
 
-// Which drop target is under the dragged stop: a stop under the pointer wins
-// (drop = take its place); else the day's list (drop = go to the end); else
-// whatever is nearest (keyboard dragging has no pointer).
-function stopsFirst(args) {
-  const under = pointerWithin(args);
-  const stops = under.filter((c) => !String(c.id).startsWith("day:"));
-  if (stops.length) return stops;
-  if (under.length) return under;
-  return closestCenter(args);
-}
+const SHEET_SNAPS = { peek: 0.18, half: 0.5, full: 0.92 }; // share of the screen height
 
-function Itinerary({ trip, near }) {
-  const days = trip.days;
-  const [dragging, setDragging] = useState(null);
-  const sensors = useSensors(
-    // Mouse: start after moving 5 px, so a click is still a click.
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    // Touch: press and hold 200 ms, so swiping still scrolls the page.
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
-    // Keyboard: focus the handle, Space to lift, arrows to move, Space to drop.
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+function Panel({ trip, tab, setTab, badDays, children }) {
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [sheet, setSheet] = useState("half");
+  const [dragHeight, setDragHeight] = useState(null);
+  const drag = useRef(null);
 
-  const findStop = (id) => {
-    for (const day of days) {
-      const index = day.stops.findIndex((s) => s.id === id);
-      if (index !== -1) return { day, index, stop: day.stops[index] };
+  // Phone: dragging the handle resizes the sheet live; letting go snaps it to
+  // the nearest of peek / half / full.
+  function onHandleDown(e) {
+    if (isDesktop()) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { startY: e.clientY, startHeight: e.currentTarget.parentElement.getBoundingClientRect().height };
+  }
+  function onHandleMove(e) {
+    if (!drag.current) return;
+    setDragHeight(Math.max(80, drag.current.startHeight + (drag.current.startY - e.clientY)));
+  }
+  function onHandleUp() {
+    if (!drag.current) return;
+    drag.current = null;
+    if (dragHeight != null) {
+      const share = dragHeight / window.innerHeight;
+      const nearest = Object.entries(SHEET_SNAPS).sort((a, b) => Math.abs(a[1] - share) - Math.abs(b[1] - share))[0][0];
+      setSheet(nearest);
     }
-    return null;
-  };
+    setDragHeight(null);
+  }
+  const cycleSheet = () => setSheet((s) => (s === "peek" ? "half" : s === "half" ? "full" : "peek"));
 
-  function onDragEnd({ active, over }) {
-    setDragging(null);
-    if (!over || active.id === over.id) return;
-    const from = findStop(active.id);
-    if (!from) return;
-
-    let toDay, toIndex;
-    if (String(over.id).startsWith("day:")) {
-      toDay = days.find((d) => `day:${d.id}` === over.id);
-      toIndex = toDay?.stops.length;
-    } else {
-      const target = findStop(over.id);
-      toDay = target?.day;
-      toIndex = target?.index;
-    }
-    if (!toDay) return;
-
-    if (toDay.id === from.day.id) {
-      const ids = arrayMove(from.day.stops.map((s) => s.id), from.index, Math.min(toIndex, from.day.stops.length - 1));
-      dispatch(op.reorderStops(trip.id, toDay.id, ids));
-    } else {
-      dispatch(op.moveStop(trip.id, active.id, toDay.id)); // lands at the end of toDay
-      const ids = toDay.stops.map((s) => s.id);
-      if (toIndex < ids.length) {
-        ids.splice(toIndex, 0, active.id);
-        dispatch(op.reorderStops(trip.id, toDay.id, ids));
-      }
-    }
+  function deleteTrip() {
+    if (!window.confirm(`Delete "${trip.name}" with everything in it?`)) return;
+    dispatch(op.deleteTrip(trip.id));
+    navigate("/");
   }
 
-  return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={stopsFirst}
-      onDragStart={({ active }) => setDragging(findStop(active.id)?.stop ?? null)}
-      onDragCancel={() => setDragging(null)}
-      onDragEnd={onDragEnd}
-    >
-      <ol className="day-list">
-        {days.map((day, index) => (
-          <Day key={day.id} day={day} index={index} days={days} near={near} />
-        ))}
-      </ol>
-      <DragOverlay>{dragging && <div className="stop drag-overlay">{dragging.name}</div>}</DragOverlay>
-    </DndContext>
-  );
-}
-
-function Day({ day, index, days, near }) {
-  const [editing, setEditing] = useState(false);
-  const [adding, setAdding] = useState(null); // null | "search" | "manual"
-  const tripId = day.trip_id;
-  const color = dayColor(index);
-  const { setNodeRef, isOver } = useDroppable({ id: `day:${day.id}` });
-  const { routeFor } = useTripView();
-  const route = routeFor(day);
-  // Route legs go between consecutive stops that have coordinates.
-  const pinnedIds = day.stops.filter((s) => s.lat != null).map((s) => s.id);
-  const legFor = (stop) => {
-    const i = pinnedIds.indexOf(stop.id);
-    return route && i > 0 ? route.legs[i - 1] : null;
-  };
-
-  const reorder = (delta) => dispatch(op.reorderDays(tripId, movedIds(days, index, delta)));
-  const remove = () => {
-    const what = day.stops.length ? ` and its ${day.stops.length} stop(s)` : "";
-    if (window.confirm(`Delete day ${index + 1}${what}?`)) dispatch(op.deleteDay(tripId, day.id));
-  };
-  const addStop = async (values) => {
-    await dispatch(op.createStop(tripId, day.id, values));
-    setAdding(null);
-  };
-
-  // Search near this day's own stops first, else the whole trip's.
-  const dayPins = day.stops.filter((s) => s.lat != null);
-  const searchNear = centerOf(dayPins) ?? near;
-
-  return (
-    <li className="card day" style={{ "--day-color": color }}>
-      {editing ? (
-        <DayForm
-          day={day}
-          onCancel={() => setEditing(false)}
-          onSubmit={async (values) => {
-            await dispatch(op.updateDay(tripId, day.id, values));
-            setEditing(false);
-          }}
-        />
-      ) : (
-        <div className="day-head">
-          <div>
-            <h2>
-              <span className="day-badge">{index + 1}</span>
-              Day {index + 1}
-              {day.date && <span className="day-date"> · {formatDay(day.date)}</span>}
-            </h2>
-            {day.title && <p className="day-title">{day.title}</p>}
-            {route && (
-              <p className="muted small">
-                {formatDuration(route.duration_s)} {MODE_VERB[day.travel_mode ?? "walk"]} · {formatDistance(route.distance_m / 1000)} in
-                total
-              </p>
-            )}
-            {day.notes && <p className="notes">{day.notes}</p>}
-          </div>
-          <div className="icon-buttons">
-            <select
-              className="mode-select"
-              aria-label="How you get around this day"
-              value={day.travel_mode ?? "walk"}
-              onChange={(e) => dispatch(op.updateDay(tripId, day.id, { travel_mode: e.target.value }))}
-            >
-              {Object.entries(TRAVEL_MODES).map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </select>
-            <button aria-label="Move day up" disabled={index === 0} onClick={() => reorder(-1)}>
-              <UpIcon />
-            </button>
-            <button aria-label="Move day down" disabled={index === days.length - 1} onClick={() => reorder(1)}>
-              <DownIcon />
-            </button>
-            <button aria-label="Edit day" onClick={() => setEditing(true)}>
-              <EditIcon />
-            </button>
-            <button aria-label="Delete day" className="danger" onClick={remove}>
-              <DeleteIcon />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <SortableContext items={day.stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-        <ol ref={setNodeRef} className={`stop-list${isOver ? " drop-target" : ""}`}>
-          {day.stops.map((stop, stopIndex) => (
-            <Stop
-              key={stop.id}
-              stop={stop}
-              index={stopIndex}
-              day={day}
-              days={days}
-              previous={stopIndex > 0 ? day.stops[stopIndex - 1] : null}
-              leg={legFor(stop)}
-            />
-          ))}
-          {day.stops.length === 0 && <li className="empty-day muted small">No stops yet. Drag one here or add a place.</li>}
-        </ol>
-      </SortableContext>
-
-      {adding === "search" && (
-        <PlaceSearch near={searchNear} onAdd={addStop} onCustom={() => setAdding("manual")} onCancel={() => setAdding(null)} />
-      )}
-      {adding === "manual" && (
-        <StopForm submitLabel="Add stop" near={searchNear} onCancel={() => setAdding(null)} onSubmit={addStop} />
-      )}
-      {adding === null && (
-        <button className="link" onClick={() => setAdding("search")}>
-          + Add a place
-        </button>
-      )}
-    </li>
-  );
-}
-
-function Stop({ stop, index, day, days, previous, leg }) {
-  const [editing, setEditing] = useState(false);
-  const { highlight, setHighlight } = useTripView();
-  const tripId = day.trip_id;
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
-    id: stop.id,
-  });
-  const style = { transform: CSS.Transform.toString(transform), transition };
-
-  if (editing) {
+  if (collapsed) {
     return (
-      <li ref={setNodeRef} style={style} className="stop editing">
-        <StopForm
-          stop={stop}
-          onCancel={() => setEditing(false)}
-          onSubmit={async (values) => {
-            await dispatch(op.updateStop(tripId, stop.id, values));
-            setEditing(false);
-          }}
-        />
-      </li>
+      <button className="panel-reopen" onClick={() => setCollapsed(false)}>
+        ☰ {trip.name}
+      </button>
     );
   }
 
-  const reorder = (delta) =>
-    dispatch(op.reorderStops(tripId, day.id, movedIds(day.stops, index, delta)));
+  const style = dragHeight != null ? { "--sheet-height": `${dragHeight}px` } : undefined;
 
   return (
-    <>
-      {previous && <Leg from={previous} to={stop} mode={day.travel_mode ?? "walk"} leg={leg} />}
-      <li
-        ref={setNodeRef}
-        id={`stop-${stop.id}`}
-        style={style}
-        className={`stop${highlight === stop.id ? " highlighted" : ""}${isDragging ? " dragging" : ""}`}
-        onMouseEnter={() => setHighlight(stop.id)}
-        onMouseLeave={() => setHighlight(null)}
-        onClick={() => setHighlight(stop.id)}
+    <aside className={`panel sheet-${sheet}${dragHeight != null ? " dragging" : ""}`} style={style} aria-label="Trip planner">
+      <div
+        className="sheet-handle"
+        role="button"
+        tabIndex={0}
+        aria-label="Resize panel"
+        onPointerDown={onHandleDown}
+        onPointerMove={onHandleMove}
+        onPointerUp={onHandleUp}
+        onPointerCancel={onHandleUp}
+        onClick={() => dragHeight == null && cycleSheet()}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && cycleSheet()}
       >
-        <button
-          ref={setActivatorNodeRef}
-          className="grip"
-          aria-label={`Drag ${stop.name}`}
-          {...attributes}
-          {...listeners}
-        >
-          <GripIcon />
-        </button>
-        <span className="stop-number">{index + 1}</span>
-        {stop.photo_url && <img className="stop-photo" src={stop.photo_url} alt="" loading="lazy" />}
-        <div className="stop-body">
-          <a className="stop-name" href={mapsUrl(stop)} target="_blank" rel="noreferrer">
-            {stop.name}
-          </a>
-          <p className="muted small">{[stop.time, stop.category, stop.address].filter(Boolean).join(" · ")}</p>
-          {stop.opening_hours && <p className="small hours">Hours: {stop.opening_hours}</p>}
-          {stop.notes && <p className="notes small">{stop.notes}</p>}
-          {stop.website && (
-            <a className="small" href={stop.website} target="_blank" rel="noreferrer">
-              Website
-            </a>
-          )}
-        </div>
-        <div className="icon-buttons stop-actions">
-          {/* Buttons stay for keyboard/screen-reader users and precise moves. */}
-          <button aria-label="Move stop up" disabled={index === 0} onClick={() => reorder(-1)}>
-            <UpIcon />
-          </button>
-          <button aria-label="Move stop down" disabled={index === day.stops.length - 1} onClick={() => reorder(1)}>
-            <DownIcon />
-          </button>
-          {days.length > 1 && (
-            <select
-              className="move-select"
-              aria-label="Move to another day"
-              value=""
-              onChange={(e) => e.target.value && dispatch(op.moveStop(tripId, stop.id, e.target.value))}
-            >
-              <option value="">Move…</option>
-              {days.map((d, i) =>
-                d.id === day.id ? null : (
-                  <option key={d.id} value={d.id}>
-                    To day {i + 1}
-                  </option>
-                ),
-              )}
-            </select>
-          )}
-          <button aria-label="Edit stop" onClick={() => setEditing(true)}>
-            <EditIcon />
-          </button>
-          <button
-            aria-label="Delete stop"
-            className="danger"
-            onClick={() => window.confirm(`Delete "${stop.name}"?`) && dispatch(op.deleteStop(tripId, stop.id))}
-          >
-            <DeleteIcon />
-          </button>
-        </div>
-      </li>
-    </>
-  );
-}
+        <span />
+      </div>
 
-// Between two stops: travel time and distance along the real route, or, when
-// there's no route (offline before it was ever loaded, quota used up), the
-// straight-line distance.
-function Leg({ from, to, mode, leg }) {
-  if (from.lat == null || to.lat == null) return null;
-  const text = leg
-    ? `${formatDuration(leg.duration_s)} ${MODE_VERB[mode]} · ${formatDistance(leg.distance_m / 1000)}`
-    : `~${formatDistance(distanceKm(from, to))} straight line`;
-  return (
-    <li className="leg muted small">
-      <span className="leg-line" aria-hidden="true" />
-      {text}
-    </li>
+      <header className="panel-head">
+        <div className="panel-title">
+          <Link to="/" className="back small">
+            ← All trips
+          </Link>
+          <h1>{trip.name}</h1>
+          <p className="muted small">
+            {[trip.destination, formatRange(trip.start_date, trip.end_date), `${trip.days.length} day${trip.days.length === 1 ? "" : "s"}`]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <div className="panel-actions">
+          <button onClick={() => setEditing((v) => !v)}>{editing ? "Close" : "Edit"}</button>
+          <button className="collapse-btn" aria-label="Hide panel" onClick={() => setCollapsed(true)}>
+            ⟨
+          </button>
+        </div>
+      </header>
+
+      {editing ? (
+        <div className="tab-body">
+          <TripForm
+            trip={trip}
+            onCancel={() => setEditing(false)}
+            onSubmit={async (values) => {
+              await dispatch(op.updateTrip(trip.id, values));
+              setEditing(false);
+            }}
+          />
+          <button className="danger link" onClick={deleteTrip}>
+            Delete trip
+          </button>
+        </div>
+      ) : (
+        <>
+          <nav className="tabs-bar" role="tablist">
+            {TABS.map(([id, label]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => {
+                  setTab(id);
+                  if (sheet === "peek") setSheet("half");
+                }}
+              >
+                {label}
+                {id === "weather" && badDays > 0 && <span className="tab-badge" title={`${badDays} day(s) with a weather warning`}>{badDays}</span>}
+                {id === "ideas" && trip.ideas?.length > 0 && <span className="tab-count">{trip.ideas.length}</span>}
+              </button>
+            ))}
+          </nav>
+          <div className="panel-body">{children}</div>
+        </>
+      )}
+    </aside>
   );
 }

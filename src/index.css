@@ -130,6 +130,10 @@ a {
   gap: 16px;
 }
 
+.page.wide {
+  max-width: 1200px;
+}
+
 .page-head,
 .trip-head,
 .day-head {
@@ -355,18 +359,63 @@ textarea {
   display: flex;
   flex-direction: column;
 }
-.trip-list {
-  gap: 10px;
+/* Trips page: a grid of cards, each a cover photo + mini map on top. */
+.trip-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
 }
 .trip-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  height: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
   text-decoration: none;
   color: var(--text);
+  transition: transform 0.15s, border-color 0.15s;
 }
 .trip-card:hover {
   border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.trip-cover {
+  position: relative;
+  height: 150px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--accent-soft);
+}
+.trip-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.trip-cover-icon {
+  display: grid;
+  place-items: center;
+  font-size: 2.4rem;
+  color: var(--accent);
+}
+.trip-mini,
+.mini-map {
+  height: 100%;
+  width: 100%;
+}
+.mini-map {
+  pointer-events: none; /* the whole card is the link */
+}
+.trip-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px 14px;
 }
 .trip-name {
   font-weight: 600;
@@ -481,13 +530,39 @@ textarea {
   font-size: 0.75rem;
   font-weight: 700;
 }
-.stop-photo {
+.thumb {
+  position: relative;
   flex-shrink: 0;
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--accent-soft);
+  display: grid;
+  place-items: center;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 8px;
-  background: var(--border);
+}
+.thumb-icon {
+  font-size: 1.5rem;
+}
+.thumb-number {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--day-color, var(--accent));
+  box-shadow: 0 0 0 2px var(--surface);
 }
 .stop-body {
   flex: 1;
@@ -500,12 +575,51 @@ textarea {
 .hours {
   color: var(--muted);
 }
-.stop-actions {
-  opacity: 0.55;
+/* Stop and day actions live behind a ⋯ button, in a row underneath, so
+   the name and details get the full width of the panel. */
+.stop {
+  flex-wrap: wrap;
 }
-.stop:hover .stop-actions,
-.stop:focus-within .stop-actions {
-  opacity: 1;
+.day-head {
+  flex-wrap: wrap;
+}
+.day-tools {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+button.more {
+  border: none;
+  background: none;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 4px 8px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+button.more[aria-expanded="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.actions-row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.actions-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+}
+.actions-row .move-select {
+  width: auto;
+  padding: 5px 8px;
+  font-size: 0.85rem;
 }
 .leg {
   display: flex;
@@ -535,67 +649,201 @@ textarea {
   color: var(--accent);
 }
 
-/* ---- Trip page layout: itinerary + map ---- */
+/* ---- Trip page: full-screen map + panel ---- */
 
-.trip-layout {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+.trip-screen {
+  position: fixed;
+  inset: var(--top-height, 57px) 0 0 0;
 }
-.itinerary {
-  padding: 20px 16px 48px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-/* Phones: map on top, normal height. */
-.map-column {
-  order: -1;
-  height: 300px;
-  border-bottom: 1px solid var(--border);
-}
-.map-column .map {
+.map-layer,
+.map-layer .map {
+  position: absolute;
+  inset: 0;
   height: 100%;
 }
-/* Wide screens: itinerary left, map right, the map stays in view. */
-@media (min-width: 1000px) {
-  /* Itinerary a fixed, readable width on the left; the map gets the rest. */
-  .trip-layout {
-    grid-template-columns: minmax(480px, 720px) minmax(0, 1fr);
-  }
-  .itinerary {
-    padding: 24px 28px 64px;
-  }
-  .map-column {
-    order: 0;
-    position: sticky;
-    top: var(--top-height, 57px);
-    height: calc(100svh - var(--top-height, 57px));
-    border-bottom: none;
-    border-left: 1px solid var(--border);
-  }
+
+/* Desktop: a frosted-glass panel floating over the map. Partly see-through
+   while you're not using it; solid as soon as the mouse is over it or you're
+   typing in it. backdrop-filter blurs the map behind, so text stays readable. */
+.panel {
+  position: absolute;
+  z-index: 1000; /* above Leaflet's panes */
+  top: 12px;
+  left: 12px;
+  bottom: 12px;
+  width: min(460px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 18%);
+  transition: background-color 0.25s;
+  overflow: hidden;
+}
+.panel:hover,
+.panel:focus-within {
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+}
+.panel-reopen {
+  position: absolute;
+  z-index: 1000;
+  top: 12px;
+  left: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+}
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 10px;
+}
+.panel-title {
+  min-width: 0;
+}
+.panel-title h1 {
+  font-size: 1.35rem;
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.panel-actions {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.tabs-bar {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs-bar button {
+  border: none;
+  background: none;
+  border-radius: 0;
+  padding: 10px 10px;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tabs-bar button[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab-badge,
+.tab-count {
+  font-size: 0.7rem;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: inline-grid;
+  place-items: center;
+}
+.tab-badge {
+  background: var(--danger);
+  color: #fff;
+}
+.tab-count {
+  background: var(--border);
+  color: var(--text);
+}
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tab-body {
+  padding: 14px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sheet-handle {
+  display: none;
 }
 
-/* Phones: stop actions wrap under the text instead of squeezing it. */
-@media (max-width: 560px) {
-  .stop {
-    flex-wrap: wrap;
+/* Days inside the panel: sections, not separate cards. */
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.day:last-child {
+  border-bottom: none;
+}
+.day-title-block {
+  min-width: 0;
+}
+.day-weather {
+  margin-left: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.weather-warning {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-top: 4px;
+}
+
+/* Phone: the panel becomes a bottom sheet over the full-screen map. */
+@media (max-width: 899px) {
+  .panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: var(--sheet-height);
+    border-radius: 18px 18px 0 0;
+    border-bottom: none;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    transition: height 0.25s ease;
   }
-  .stop-actions {
-    width: 100%;
-    justify-content: flex-end;
-    opacity: 1;
+  .panel.dragging {
+    transition: none;
   }
-  .stop-photo {
-    width: 52px;
-    height: 52px;
+  .panel.sheet-peek {
+    --sheet-height: 18svh;
   }
-  .day-head {
-    flex-direction: column;
+  .panel.sheet-half {
+    --sheet-height: 50svh;
   }
-  h1 {
-    font-size: 1.5rem;
+  .panel.sheet-full {
+    --sheet-height: calc(100svh - var(--top-height, 57px) - 8px);
+  }
+  .sheet-handle {
+    display: grid;
+    place-items: center;
+    padding: 8px 0 2px;
+    cursor: grab;
+    touch-action: none;
+  }
+  .sheet-handle span {
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--border);
+  }
+  .collapse-btn {
+    display: none;
+  }
+  .panel-head {
+    padding-top: 4px;
   }
 }
 
@@ -824,4 +1072,137 @@ button[aria-pressed="true"] {
 .coords-field button {
   white-space: nowrap;
   padding-block: 9px;
+}
+
+/* ---- Ideas, expenses, notes, weather ---- */
+
+.idea-list,
+.expense-list,
+.weather-list,
+.category-bars,
+.checklist ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pin-hollow span {
+  background: var(--surface);
+  color: var(--pin-color);
+  border: 2px dashed var(--pin-color);
+}
+
+.expense-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+.expense-summary > div {
+  display: flex;
+  flex-direction: column;
+}
+.expense-total {
+  font-size: 1.7rem;
+  letter-spacing: -0.02em;
+}
+.expense-summary select {
+  width: auto;
+  padding: 4px 6px;
+}
+.category-bars li {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+}
+.expense-form {
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.expense-form select {
+  font: inherit;
+  padding: 9px 8px;
+  background: var(--bg);
+}
+.expense {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.expense-cat {
+  font-size: 1.3rem;
+}
+.expense-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+button.icon-only {
+  padding: 4px 8px;
+}
+
+.notes-field textarea {
+  margin-top: 6px;
+}
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.checklist li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+.checklist li label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  cursor: pointer;
+}
+.checklist input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.checklist li.done span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.weather-day {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.weather-day.bad {
+  outline: 1px solid var(--danger);
+}
+.weather-icon {
+  font-size: 1.8rem;
+  line-height: 1;
 }
