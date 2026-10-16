@@ -25,11 +25,12 @@ import { DayForm, StopForm, TripForm } from "../components/forms.jsx";
 import { DeleteIcon, DownIcon, EditIcon, GripIcon, UpIcon } from "../components/icons.jsx";
 import PlaceSearch from "../components/PlaceSearch.jsx";
 import { addDays, formatDay, formatRange } from "../dates.js";
-import { centerOf, distanceKm, formatDistance } from "../geo.js";
+import { centerOf, distanceKm, formatDistance, formatDuration } from "../geo.js";
 import { useStore, useTrip } from "../store/hooks.js";
 import { op } from "../store/ops.js";
 import { dispatch, refreshTrip } from "../store/store.js";
 import { TripViewContext, useTripView } from "../trip/context.js";
+import { dayRouteRequest, loadRoute } from "../trip/routes.js";
 
 // The map (Leaflet) is a big library only this page needs, so it's loaded on
 // demand: a separate JS file, downloaded the first time a map is shown (and
@@ -42,6 +43,43 @@ const TripMap = lazy(() => import("../components/TripMap.jsx"));
 // loop sends it to the server when it can.
 
 const TRAVEL_MODES = { walk: "Walk", bike: "Bike", drive: "Drive" };
+const MODE_VERB = { walk: "walk", bike: "by bike", drive: "drive" };
+
+// Loads a route for every day with 2+ placed stops, once the stops have
+// stopped changing for a moment (dragging fires several changes in a row and
+// each route request counts against the daily quota). Returns routeFor(day),
+// which only hands out a route that matches the day's CURRENT stops and mode.
+function useRoutes(days) {
+  const [routes, setRoutes] = useState({});
+  const requests = days.map(dayRouteRequest).filter(Boolean);
+  // A plain string as the effect's dependency: it only changes when some
+  // day's stops or mode really change, not on every render.
+  const signature = JSON.stringify(requests.map((r) => [r.key, r.mode, r.points]));
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      for (const [key, mode, points] of JSON.parse(signature)) {
+        const route = await loadRoute(mode, points);
+        if (cancelled) return;
+        if (route) setRoutes((prev) => ({ ...prev, [key]: route }));
+      }
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [signature]);
+
+  return useCallback(
+    (day) => {
+      const request = dayRouteRequest(day);
+      const route = request && routes[request.key];
+      return route && !route.none ? route : null;
+    },
+    [routes],
+  );
+}
 
 function movedIds(items, index, delta) {
   const ids = items.map((item) => item.id);
@@ -62,6 +100,7 @@ export default function TripPage() {
   const [editingTrip, setEditingTrip] = useState(false);
   const [highlight, setHighlight] = useState(null);
   const [preview, setPreview] = useState(null);
+  const routeFor = useRoutes(trip?.days ?? []);
 
   // Show the stored copy right away, fetch a fresh one in the background.
   useEffect(() => {
@@ -73,7 +112,10 @@ export default function TripPage() {
     setHighlight(stopId);
     document.getElementById(`stop-${stopId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
-  const view = useMemo(() => ({ highlight, setHighlight, preview, setPreview, focus }), [highlight, preview, focus]);
+  const view = useMemo(
+    () => ({ highlight, setHighlight, preview, setPreview, focus, routeFor }),
+    [highlight, preview, focus, routeFor],
+  );
 
   if (!trip) {
     return (
@@ -254,6 +296,14 @@ function Day({ day, index, days, near }) {
   const tripId = day.trip_id;
   const color = dayColor(index);
   const { setNodeRef, isOver } = useDroppable({ id: `day:${day.id}` });
+  const { routeFor } = useTripView();
+  const route = routeFor(day);
+  // Route legs go between consecutive stops that have coordinates.
+  const pinnedIds = day.stops.filter((s) => s.lat != null).map((s) => s.id);
+  const legFor = (stop) => {
+    const i = pinnedIds.indexOf(stop.id);
+    return route && i > 0 ? route.legs[i - 1] : null;
+  };
 
   const reorder = (delta) => dispatch(op.reorderDays(tripId, movedIds(days, index, delta)));
   const remove = () => {
@@ -289,6 +339,12 @@ function Day({ day, index, days, near }) {
               {day.date && <span className="day-date"> · {formatDay(day.date)}</span>}
             </h2>
             {day.title && <p className="day-title">{day.title}</p>}
+            {route && (
+              <p className="muted small">
+                {formatDuration(route.duration_s)} {MODE_VERB[day.travel_mode ?? "walk"]} · {formatDistance(route.distance_m / 1000)} in
+                total
+              </p>
+            )}
             {day.notes && <p className="notes">{day.notes}</p>}
           </div>
           <div className="icon-buttons">
@@ -330,6 +386,7 @@ function Day({ day, index, days, near }) {
               day={day}
               days={days}
               previous={stopIndex > 0 ? day.stops[stopIndex - 1] : null}
+              leg={legFor(stop)}
             />
           ))}
           {day.stops.length === 0 && <li className="empty-day muted small">No stops yet. Drag one here or add a place.</li>}
@@ -351,7 +408,7 @@ function Day({ day, index, days, near }) {
   );
 }
 
-function Stop({ stop, index, day, days, previous }) {
+function Stop({ stop, index, day, days, previous, leg }) {
   const [editing, setEditing] = useState(false);
   const { highlight, setHighlight } = useTripView();
   const tripId = day.trip_id;
@@ -380,7 +437,7 @@ function Stop({ stop, index, day, days, previous }) {
 
   return (
     <>
-      {previous && <Leg from={previous} to={stop} mode={day.travel_mode ?? "walk"} />}
+      {previous && <Leg from={previous} to={stop} mode={day.travel_mode ?? "walk"} leg={leg} />}
       <li
         ref={setNodeRef}
         id={`stop-${stop.id}`}
@@ -455,14 +512,18 @@ function Stop({ stop, index, day, days, previous }) {
   );
 }
 
-// Between two stops: how far it is. Straight-line distance for now; real
-// route times come from the routing service (next step).
-function Leg({ from, to, mode }) {
+// Between two stops: travel time and distance along the real route, or, when
+// there's no route (offline before it was ever loaded, quota used up), the
+// straight-line distance.
+function Leg({ from, to, mode, leg }) {
   if (from.lat == null || to.lat == null) return null;
-  const km = distanceKm(from, to);
+  const text = leg
+    ? `${formatDuration(leg.duration_s)} ${MODE_VERB[mode]} · ${formatDistance(leg.distance_m / 1000)}`
+    : `~${formatDistance(distanceKm(from, to))} straight line`;
   return (
-    <li className="leg muted small" aria-label={`About ${formatDistance(km)} to the next stop`}>
-      <span className="leg-line" aria-hidden="true" />~{formatDistance(km)} ({mode}, straight line)
+    <li className="leg muted small">
+      <span className="leg-line" aria-hidden="true" />
+      {text}
     </li>
   );
 }

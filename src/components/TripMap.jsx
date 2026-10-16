@@ -20,7 +20,7 @@ function FitTo({ points }) {
 // All stops with coordinates: one colour per day, numbered in visiting order,
 // lines between them. Plus, while searching, the results as small grey pins.
 export default function TripMap({ days }) {
-  const { highlight, focus, preview } = useTripView();
+  const { highlight, focus, preview, routeFor } = useTripView();
 
   const routes = useMemo(
     () =>
@@ -44,8 +44,16 @@ export default function TripMap({ days }) {
 
       {routes.map(({ day, color, stops }) => (
         <Fragment key={day.id}>
-          {stops.length > 1 && (
-            <Polyline positions={stops.map((s) => [s.lat, s.lng])} pathOptions={{ color, weight: 3, opacity: 0.6, dashArray: "6 6" }} />
+          {/* The real route when loaded, else dashed straight lines. */}
+          {routeFor(day) ? (
+            <Polyline positions={routeFor(day).geometry} pathOptions={{ color, weight: 4, opacity: 0.75 }} />
+          ) : (
+            stops.length > 1 && (
+              <Polyline
+                positions={stops.map((s) => [s.lat, s.lng])}
+                pathOptions={{ color, weight: 3, opacity: 0.6, dashArray: "6 6" }}
+              />
+            )
           )}
           {stops.map((stop) => (
             <Marker

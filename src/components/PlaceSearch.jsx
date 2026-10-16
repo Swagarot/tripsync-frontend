@@ -59,18 +59,22 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
   useEffect(() => () => setPreview(null), [setPreview]);
 
   async function pick(result) {
-    setSelected({ result, details: null, loading: true });
-    try {
-      const details = await api(`/places/${result.osm_ref}`);
-      setSelected((s) => (s?.result === result ? { result, details, loading: false } : s));
-    } catch {
-      // Details are a bonus: the place can still be added from the result.
-      setSelected((s) => (s?.result === result ? { result, details: null, loading: false } : s));
-    }
+    // Details are a bonus: if they fail, the place can still be added from
+    // the search result alone (hence the catch -> null).
+    const details = api(`/places/${result.osm_ref}`).catch(() => null);
+    setSelected({ result, details: null, loading: true, pending: details });
+    const loaded = await details;
+    setSelected((s) => (s?.result === result ? { ...s, details: loaded, loading: false } : s));
   }
 
-  function add() {
-    const place = { ...selected.result, ...(selected.details ?? {}) };
+  const [adding, setAdding] = useState(false);
+
+  async function add() {
+    // Tapped "Add" before the details arrived? Wait for them (a second or
+    // two), otherwise the stop would be saved without photo and hours.
+    setAdding(true);
+    const details = selected.details ?? (await selected.pending);
+    const place = { ...selected.result, ...(details ?? {}) };
     onAdd({
       name: place.name.slice(0, 200),
       address: place.address,
@@ -116,7 +120,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
       {error && <p className="error">{error.message}</p>}
 
       {selected ? (
-        <PlaceCard selected={selected} onAdd={add} onBack={() => setSelected(null)} />
+        <PlaceCard selected={selected} adding={adding} onAdd={add} onBack={() => setSelected(null)} />
       ) : (
         <>
           {searching && <p className="muted small">Searching…</p>}
@@ -146,7 +150,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel }) {
   );
 }
 
-function PlaceCard({ selected, onAdd, onBack }) {
+function PlaceCard({ selected, adding, onAdd, onBack }) {
   const { result, details, loading } = selected;
   const place = { ...result, ...(details ?? {}) };
   const facts = [
@@ -190,8 +194,8 @@ function PlaceCard({ selected, onAdd, onBack }) {
           </p>
         )}
         <div className="form-actions">
-          <button className="primary" onClick={onAdd}>
-            Add to day
+          <button className="primary" onClick={onAdd} disabled={adding}>
+            {adding ? "Adding…" : "Add to day"}
           </button>
           <button onClick={onBack}>Back to results</button>
         </div>
