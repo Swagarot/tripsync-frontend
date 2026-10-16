@@ -11,11 +11,12 @@ export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyri
 
 // Pins drawn with HTML/CSS instead of Leaflet's default marker images, whose
 // image paths break when a bundler like Vite renames the files.
-export function pin(label, color) {
+export function pin(label, color, { highlighted = false, small = false } = {}) {
+  const size = small ? 14 : highlighted ? 36 : 28;
   return L.divIcon({
-    className: "pin",
-    html: `<span style="--pin-color:${color}">${label}</span>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    className: `pin${highlighted ? " pin-highlighted" : ""}${small ? " pin-small" : ""}`,
+    html: `<span style="--pin-color:${color}">${small ? "" : label}</span>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
 }

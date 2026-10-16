@@ -43,3 +43,10 @@ export const DeleteIcon = () => (
     <path d="M18 6 6 18M6 6l12 12" />
   </Icon>
 );
+
+// Six dots: "you can drag this".
+export const GripIcon = () => (
+  <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
+    {[3, 9, 15].flatMap((y) => [<circle key={`a${y}`} cx="4" cy={y} r="1.6" />, <circle key={`b${y}`} cx="10" cy={y} r="1.6" />])}
+  </svg>
+);

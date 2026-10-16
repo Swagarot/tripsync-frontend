@@ -1,23 +1,48 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import {
+  closestCenter,
+  DndContext,
+  pointerWithin,
+  DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { dayColor } from "../colors.js";
 import { DayForm, StopForm, TripForm } from "../components/forms.jsx";
-import { DeleteIcon, DownIcon, EditIcon, UpIcon } from "../components/icons.jsx";
+import { DeleteIcon, DownIcon, EditIcon, GripIcon, UpIcon } from "../components/icons.jsx";
+import PlaceSearch from "../components/PlaceSearch.jsx";
 import { addDays, formatDay, formatRange } from "../dates.js";
+import { centerOf, distanceKm, formatDistance } from "../geo.js";
 import { useStore, useTrip } from "../store/hooks.js";
 import { op } from "../store/ops.js";
 import { dispatch, refreshTrip } from "../store/store.js";
+import { TripViewContext, useTripView } from "../trip/context.js";
 
 // The map (Leaflet) is a big library only this page needs, so it's loaded on
 // demand: a separate JS file, downloaded the first time a map is shown (and
 // cached by the service worker after that, so it works offline too).
 const TripMap = lazy(() => import("../components/TripMap.jsx"));
 
-// Every change is an op (store/ops.js): dispatch() applies it on screen
-// immediately and the sync loop sends it to the server when it can.
+// Layout: itinerary on the left, a big map on the right that stays in view
+// while scrolling (on phones: map on top). Every change is an op
+// (store/ops.js): dispatch() applies it on screen immediately and the sync
+// loop sends it to the server when it can.
 
-// Swap an item with its neighbour and return the list of IDs in the new
-// order, which is what the reorder endpoints expect.
+const TRAVEL_MODES = { walk: "Walk", bike: "Bike", drive: "Drive" };
+
 function movedIds(items, index, delta) {
   const ids = items.map((item) => item.id);
   [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
@@ -35,12 +60,20 @@ export default function TripPage() {
   const trip = useTrip(tripId);
   const { online } = useStore();
   const [editingTrip, setEditingTrip] = useState(false);
-  const [showMap, setShowMap] = useState(true);
+  const [highlight, setHighlight] = useState(null);
+  const [preview, setPreview] = useState(null);
 
   // Show the stored copy right away, fetch a fresh one in the background.
   useEffect(() => {
     refreshTrip(tripId);
   }, [tripId]);
+
+  // Clicking a pin scrolls its stop into view.
+  const focus = useCallback((stopId) => {
+    setHighlight(stopId);
+    document.getElementById(`stop-${stopId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+  const view = useMemo(() => ({ highlight, setHighlight, preview, setPreview, focus }), [highlight, preview, focus]);
 
   if (!trip) {
     return (
@@ -60,7 +93,7 @@ export default function TripPage() {
   }
 
   const days = trip.days;
-  const hasPins = days.some((d) => d.stops.some((s) => s.lat != null));
+  const pinned = days.flatMap((d) => d.stops).filter((s) => s.lat != null);
 
   function deleteTrip() {
     if (!window.confirm(`Delete "${trip.name}" with all its days and stops?`)) return;
@@ -68,8 +101,8 @@ export default function TripPage() {
     navigate("/");
   }
 
-  // New days get the next date after the last one (or after the trip start),
-  // so planning a week is just clicking "Add day" seven times.
+  // New days get the next date after the last one (or the trip start), so
+  // planning a week is just clicking "Add day" seven times.
   function suggestedDate() {
     const last = days.at(-1)?.date;
     if (last) return addDays(last, 1);
@@ -77,84 +110,167 @@ export default function TripPage() {
   }
 
   return (
-    <main className="page">
-      <Link to="/" className="back">
-        ← All trips
-      </Link>
+    <TripViewContext.Provider value={view}>
+      <main className="trip-layout">
+        <section className="itinerary">
+          <Link to="/" className="back">
+            ← All trips
+          </Link>
 
-      {editingTrip ? (
-        <div className="card">
-          <h2>Edit trip</h2>
-          <TripForm
-            trip={trip}
-            onCancel={() => setEditingTrip(false)}
-            onSubmit={async (values) => {
-              await dispatch(op.updateTrip(trip.id, values));
-              setEditingTrip(false);
-            }}
-          />
-          <button className="danger link" onClick={deleteTrip}>
-            Delete trip
-          </button>
-        </div>
-      ) : (
-        <header className="trip-head">
-          <div>
-            <h1>{trip.name}</h1>
-            <p className="muted">{formatRange(trip.start_date, trip.end_date)}</p>
-            {trip.notes && <p className="notes">{trip.notes}</p>}
-          </div>
-          <div className="head-actions">
-            {hasPins && (
-              <button aria-pressed={showMap} onClick={() => setShowMap((v) => !v)}>
-                Map
+          {editingTrip ? (
+            <div className="card">
+              <h2>Edit trip</h2>
+              <TripForm
+                trip={trip}
+                onCancel={() => setEditingTrip(false)}
+                onSubmit={async (values) => {
+                  await dispatch(op.updateTrip(trip.id, values));
+                  setEditingTrip(false);
+                }}
+              />
+              <button className="danger link" onClick={deleteTrip}>
+                Delete trip
               </button>
-            )}
-            <button onClick={() => setEditingTrip(true)}>Edit</button>
-          </div>
-        </header>
-      )}
+            </div>
+          ) : (
+            <header className="trip-head">
+              <div>
+                <h1>{trip.name}</h1>
+                <p className="muted">
+                  {formatRange(trip.start_date, trip.end_date)} · {days.length} day{days.length === 1 ? "" : "s"},{" "}
+                  {pinned.length} place{pinned.length === 1 ? "" : "s"} on the map
+                </p>
+                {trip.notes && <p className="notes">{trip.notes}</p>}
+              </div>
+              <button onClick={() => setEditingTrip(true)}>Edit</button>
+            </header>
+          )}
 
-      {hasPins && showMap && (
-        <Suspense fallback={<div className="card map-placeholder">Loading map…</div>}>
-          <TripMap days={days} />
-        </Suspense>
-      )}
+          <Itinerary trip={trip} near={centerOf(pinned)} />
 
-      <ol className="day-list">
-        {days.map((day, index) => (
-          <Day key={day.id} day={day} index={index} days={days} />
-        ))}
-      </ol>
+          <button className="add-day" onClick={() => dispatch(op.createDay(trip.id, { date: suggestedDate() }))}>
+            + Add day
+          </button>
+        </section>
 
-      <button
-        className="add-day"
-        onClick={() => dispatch(op.createDay(trip.id, { date: suggestedDate() }))}
-      >
-        + Add day
-      </button>
-    </main>
+        <aside className="map-column">
+          <Suspense fallback={<div className="map map-placeholder">Loading map…</div>}>
+            <TripMap days={days} />
+          </Suspense>
+        </aside>
+      </main>
+    </TripViewContext.Provider>
   );
 }
 
-function Day({ day, index, days }) {
+// --- Drag and drop -------------------------------------------------------------
+// Each day's stop list is a sortable list (dnd-kit). A stop can be dropped on
+// another stop (takes its place) or on a day's empty area (goes to the end).
+// Dropping translates into the same ops the buttons use: reorderStops, or
+// moveStop + reorderStops for another day, so it works offline too.
+
+// Which drop target is under the dragged stop: a stop under the pointer wins
+// (drop = take its place); else the day's list (drop = go to the end); else
+// whatever is nearest (keyboard dragging has no pointer).
+function stopsFirst(args) {
+  const under = pointerWithin(args);
+  const stops = under.filter((c) => !String(c.id).startsWith("day:"));
+  if (stops.length) return stops;
+  if (under.length) return under;
+  return closestCenter(args);
+}
+
+function Itinerary({ trip, near }) {
+  const days = trip.days;
+  const [dragging, setDragging] = useState(null);
+  const sensors = useSensors(
+    // Mouse: start after moving 5 px, so a click is still a click.
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    // Touch: press and hold 200 ms, so swiping still scrolls the page.
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    // Keyboard: focus the handle, Space to lift, arrows to move, Space to drop.
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const findStop = (id) => {
+    for (const day of days) {
+      const index = day.stops.findIndex((s) => s.id === id);
+      if (index !== -1) return { day, index, stop: day.stops[index] };
+    }
+    return null;
+  };
+
+  function onDragEnd({ active, over }) {
+    setDragging(null);
+    if (!over || active.id === over.id) return;
+    const from = findStop(active.id);
+    if (!from) return;
+
+    let toDay, toIndex;
+    if (String(over.id).startsWith("day:")) {
+      toDay = days.find((d) => `day:${d.id}` === over.id);
+      toIndex = toDay?.stops.length;
+    } else {
+      const target = findStop(over.id);
+      toDay = target?.day;
+      toIndex = target?.index;
+    }
+    if (!toDay) return;
+
+    if (toDay.id === from.day.id) {
+      const ids = arrayMove(from.day.stops.map((s) => s.id), from.index, Math.min(toIndex, from.day.stops.length - 1));
+      dispatch(op.reorderStops(trip.id, toDay.id, ids));
+    } else {
+      dispatch(op.moveStop(trip.id, active.id, toDay.id)); // lands at the end of toDay
+      const ids = toDay.stops.map((s) => s.id);
+      if (toIndex < ids.length) {
+        ids.splice(toIndex, 0, active.id);
+        dispatch(op.reorderStops(trip.id, toDay.id, ids));
+      }
+    }
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={stopsFirst}
+      onDragStart={({ active }) => setDragging(findStop(active.id)?.stop ?? null)}
+      onDragCancel={() => setDragging(null)}
+      onDragEnd={onDragEnd}
+    >
+      <ol className="day-list">
+        {days.map((day, index) => (
+          <Day key={day.id} day={day} index={index} days={days} near={near} />
+        ))}
+      </ol>
+      <DragOverlay>{dragging && <div className="stop drag-overlay">{dragging.name}</div>}</DragOverlay>
+    </DndContext>
+  );
+}
+
+function Day({ day, index, days, near }) {
   const [editing, setEditing] = useState(false);
-  const [addingStop, setAddingStop] = useState(false);
+  const [adding, setAdding] = useState(null); // null | "search" | "manual"
   const tripId = day.trip_id;
+  const color = dayColor(index);
+  const { setNodeRef, isOver } = useDroppable({ id: `day:${day.id}` });
 
   const reorder = (delta) => dispatch(op.reorderDays(tripId, movedIds(days, index, delta)));
-
   const remove = () => {
     const what = day.stops.length ? ` and its ${day.stops.length} stop(s)` : "";
     if (window.confirm(`Delete day ${index + 1}${what}?`)) dispatch(op.deleteDay(tripId, day.id));
   };
+  const addStop = async (values) => {
+    await dispatch(op.createStop(tripId, day.id, values));
+    setAdding(null);
+  };
 
-  // Where to centre the "pick on map" map: the last stop of this day that has
-  // coordinates, else any stop of the trip.
-  const nearby = [...day.stops, ...days.flatMap((d) => d.stops)].reverse().find((s) => s.lat != null);
+  // Search near this day's own stops first, else the whole trip's.
+  const dayPins = day.stops.filter((s) => s.lat != null);
+  const searchNear = centerOf(dayPins) ?? near;
 
   return (
-    <li className="card day">
+    <li className="card day" style={{ "--day-color": color }}>
       {editing ? (
         <DayForm
           day={day}
@@ -168,9 +284,7 @@ function Day({ day, index, days }) {
         <div className="day-head">
           <div>
             <h2>
-              <span className="day-badge" style={{ "--day-color": dayColor(index) }}>
-                {index + 1}
-              </span>
+              <span className="day-badge">{index + 1}</span>
               Day {index + 1}
               {day.date && <span className="day-date"> · {formatDay(day.date)}</span>}
             </h2>
@@ -178,6 +292,18 @@ function Day({ day, index, days }) {
             {day.notes && <p className="notes">{day.notes}</p>}
           </div>
           <div className="icon-buttons">
+            <select
+              className="mode-select"
+              aria-label="How you get around this day"
+              value={day.travel_mode ?? "walk"}
+              onChange={(e) => dispatch(op.updateDay(tripId, day.id, { travel_mode: e.target.value }))}
+            >
+              {Object.entries(TRAVEL_MODES).map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </select>
             <button aria-label="Move day up" disabled={index === 0} onClick={() => reorder(-1)}>
               <UpIcon />
             </button>
@@ -194,42 +320,51 @@ function Day({ day, index, days }) {
         </div>
       )}
 
-      <ol className="stop-list">
-        {day.stops.map((stop, stopIndex) => (
-          <Stop key={stop.id} stop={stop} index={stopIndex} day={day} days={days} nearby={nearby} />
-        ))}
-      </ol>
+      <SortableContext items={day.stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+        <ol ref={setNodeRef} className={`stop-list${isOver ? " drop-target" : ""}`}>
+          {day.stops.map((stop, stopIndex) => (
+            <Stop
+              key={stop.id}
+              stop={stop}
+              index={stopIndex}
+              day={day}
+              days={days}
+              previous={stopIndex > 0 ? day.stops[stopIndex - 1] : null}
+            />
+          ))}
+          {day.stops.length === 0 && <li className="empty-day muted small">No stops yet. Drag one here or add a place.</li>}
+        </ol>
+      </SortableContext>
 
-      {addingStop ? (
-        <StopForm
-          submitLabel="Add stop"
-          near={nearby}
-          onCancel={() => setAddingStop(false)}
-          onSubmit={async (values) => {
-            await dispatch(op.createStop(tripId, day.id, values));
-            setAddingStop(false);
-          }}
-        />
-      ) : (
-        <button className="link" onClick={() => setAddingStop(true)}>
-          + Add stop
+      {adding === "search" && (
+        <PlaceSearch near={searchNear} onAdd={addStop} onCustom={() => setAdding("manual")} onCancel={() => setAdding(null)} />
+      )}
+      {adding === "manual" && (
+        <StopForm submitLabel="Add stop" near={searchNear} onCancel={() => setAdding(null)} onSubmit={addStop} />
+      )}
+      {adding === null && (
+        <button className="link" onClick={() => setAdding("search")}>
+          + Add a place
         </button>
       )}
     </li>
   );
 }
 
-function Stop({ stop, index, day, days, nearby }) {
+function Stop({ stop, index, day, days, previous }) {
   const [editing, setEditing] = useState(false);
-  const stops = day.stops;
+  const { highlight, setHighlight } = useTripView();
   const tripId = day.trip_id;
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: stop.id,
+  });
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   if (editing) {
     return (
-      <li className="stop editing">
+      <li ref={setNodeRef} style={style} className="stop editing">
         <StopForm
           stop={stop}
-          near={nearby}
           onCancel={() => setEditing(false)}
           onSubmit={async (values) => {
             await dispatch(op.updateStop(tripId, stop.id, values));
@@ -240,53 +375,94 @@ function Stop({ stop, index, day, days, nearby }) {
     );
   }
 
-  const reorder = (delta) => dispatch(op.reorderStops(tripId, day.id, movedIds(stops, index, delta)));
+  const reorder = (delta) =>
+    dispatch(op.reorderStops(tripId, day.id, movedIds(day.stops, index, delta)));
 
   return (
-    <li className="stop">
-      <span className="stop-time">{stop.time ?? ""}</span>
-      <div className="stop-body">
-        <a className="stop-name" href={mapsUrl(stop)} target="_blank" rel="noreferrer">
-          {stop.name}
-        </a>
-        {stop.address && <p className="muted small">{stop.address}</p>}
-        {stop.notes && <p className="notes small">{stop.notes}</p>}
-      </div>
-      <div className="icon-buttons">
-        <button aria-label="Move stop up" disabled={index === 0} onClick={() => reorder(-1)}>
-          <UpIcon />
-        </button>
-        <button aria-label="Move stop down" disabled={index === stops.length - 1} onClick={() => reorder(1)}>
-          <DownIcon />
-        </button>
-        {days.length > 1 && (
-          <select
-            className="move-select"
-            aria-label="Move to another day"
-            value=""
-            onChange={(e) => e.target.value && dispatch(op.moveStop(tripId, stop.id, e.target.value))}
-          >
-            <option value="">Move…</option>
-            {days.map((d, i) =>
-              d.id === day.id ? null : (
-                <option key={d.id} value={d.id}>
-                  To day {i + 1}
-                </option>
-              ),
-            )}
-          </select>
-        )}
-        <button aria-label="Edit stop" onClick={() => setEditing(true)}>
-          <EditIcon />
-        </button>
+    <>
+      {previous && <Leg from={previous} to={stop} mode={day.travel_mode ?? "walk"} />}
+      <li
+        ref={setNodeRef}
+        id={`stop-${stop.id}`}
+        style={style}
+        className={`stop${highlight === stop.id ? " highlighted" : ""}${isDragging ? " dragging" : ""}`}
+        onMouseEnter={() => setHighlight(stop.id)}
+        onMouseLeave={() => setHighlight(null)}
+        onClick={() => setHighlight(stop.id)}
+      >
         <button
-          aria-label="Delete stop"
-          className="danger"
-          onClick={() => window.confirm(`Delete "${stop.name}"?`) && dispatch(op.deleteStop(tripId, stop.id))}
+          ref={setActivatorNodeRef}
+          className="grip"
+          aria-label={`Drag ${stop.name}`}
+          {...attributes}
+          {...listeners}
         >
-          <DeleteIcon />
+          <GripIcon />
         </button>
-      </div>
+        <span className="stop-number">{index + 1}</span>
+        {stop.photo_url && <img className="stop-photo" src={stop.photo_url} alt="" loading="lazy" />}
+        <div className="stop-body">
+          <a className="stop-name" href={mapsUrl(stop)} target="_blank" rel="noreferrer">
+            {stop.name}
+          </a>
+          <p className="muted small">{[stop.time, stop.category, stop.address].filter(Boolean).join(" · ")}</p>
+          {stop.opening_hours && <p className="small hours">Hours: {stop.opening_hours}</p>}
+          {stop.notes && <p className="notes small">{stop.notes}</p>}
+          {stop.website && (
+            <a className="small" href={stop.website} target="_blank" rel="noreferrer">
+              Website
+            </a>
+          )}
+        </div>
+        <div className="icon-buttons stop-actions">
+          {/* Buttons stay for keyboard/screen-reader users and precise moves. */}
+          <button aria-label="Move stop up" disabled={index === 0} onClick={() => reorder(-1)}>
+            <UpIcon />
+          </button>
+          <button aria-label="Move stop down" disabled={index === day.stops.length - 1} onClick={() => reorder(1)}>
+            <DownIcon />
+          </button>
+          {days.length > 1 && (
+            <select
+              className="move-select"
+              aria-label="Move to another day"
+              value=""
+              onChange={(e) => e.target.value && dispatch(op.moveStop(tripId, stop.id, e.target.value))}
+            >
+              <option value="">Move…</option>
+              {days.map((d, i) =>
+                d.id === day.id ? null : (
+                  <option key={d.id} value={d.id}>
+                    To day {i + 1}
+                  </option>
+                ),
+              )}
+            </select>
+          )}
+          <button aria-label="Edit stop" onClick={() => setEditing(true)}>
+            <EditIcon />
+          </button>
+          <button
+            aria-label="Delete stop"
+            className="danger"
+            onClick={() => window.confirm(`Delete "${stop.name}"?`) && dispatch(op.deleteStop(tripId, stop.id))}
+          >
+            <DeleteIcon />
+          </button>
+        </div>
+      </li>
+    </>
+  );
+}
+
+// Between two stops: how far it is. Straight-line distance for now; real
+// route times come from the routing service (next step).
+function Leg({ from, to, mode }) {
+  if (from.lat == null || to.lat == null) return null;
+  const km = distanceKm(from, to);
+  return (
+    <li className="leg muted small" aria-label={`About ${formatDistance(km)} to the next stop`}>
+      <span className="leg-line" aria-hidden="true" />~{formatDistance(km)} ({mode}, straight line)
     </li>
   );
 }

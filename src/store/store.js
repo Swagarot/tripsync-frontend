@@ -174,10 +174,22 @@ async function settle(o, accepted) {
 }
 
 let running = null;
+let again = false;
 
-// Only one flush runs at a time; calling it again joins the running one.
+// Only one flush runs at a time. A change made while one is running (for
+// example during its final refresh) sets `again`, so the loop goes round once
+// more instead of leaving that change for the 30-second retry.
 export function flush() {
-  if (!running) running = sendAll().finally(() => (running = null));
+  if (running) {
+    again = true;
+    return running;
+  }
+  running = (async () => {
+    do {
+      again = false;
+      await sendAll();
+    } while (again && state.online && state.outbox.length > 0);
+  })().finally(() => (running = null));
   return running;
 }
 

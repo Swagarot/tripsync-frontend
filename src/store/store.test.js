@@ -88,6 +88,25 @@ describe("sync queue", () => {
   });
 });
 
+describe("changes made during a sync", () => {
+  it("are sent in the same run, not left for the 30 s retry", async () => {
+    let sneakIn = true;
+    const realFetch = server.fetch.getMockImplementation();
+    server.fetch.mockImplementation(async (url, opts) => {
+      // While the first sync refreshes the list, the user makes another change.
+      if (sneakIn && url === "/api/trips" && opts?.method === "GET") {
+        sneakIn = false;
+        dispatch(op.createTrip({ name: "Second" }));
+      }
+      return realFetch(url, opts);
+    });
+    await dispatch(op.createTrip({ name: "First" }));
+    await flush();
+    expect(getState().outbox).toHaveLength(0);
+    expect(writes(server)).toEqual(["POST /trips", "POST /trips"]);
+  });
+});
+
 describe("storage on the device", () => {
   it("survives a restart for the same user", async () => {
     server.down = true;

@@ -52,6 +52,17 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          {
+            // Place photos (Wikipedia / Wikimedia Commons), same idea: once
+            // seen, they show offline too.
+            urlPattern: /^https:\/\/(upload|thumb|commons)\.wikimedia\.org\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'place-photos',
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
     }),

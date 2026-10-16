@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link, Navigate, Route, Routes } from "react-router";
 import { useAuth } from "./auth/context.js";
 import { SyncBar, UpdateBanner } from "./components/common.jsx";
@@ -42,13 +43,31 @@ function Header() {
   );
 }
 
+// The sticky header + status bars change height (a bar appears when offline).
+// Publish the current height as a CSS variable, so the trip page's map can
+// sit exactly below it.
+function useTopHeight() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() =>
+      document.documentElement.style.setProperty("--top-height", `${el.offsetHeight}px`),
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return ref;
+}
+
 export default function App() {
+  const topRef = useTopHeight();
   // The URL decides which page shows. nginx's try_files (and, offline, the
   // service worker) send every unknown path to index.html, so reloading
   // /trips/<id> still lands here.
   return (
     <div className="app">
-      <div className="top">
+      <div className="top" ref={topRef}>
         <Header />
         <SyncBar />
         <UpdateBanner />

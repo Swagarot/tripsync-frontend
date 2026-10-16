@@ -113,7 +113,21 @@ function reorderBy(items, ids) {
 }
 
 function newStop(o) {
-  return { id: o.stopId, day_id: o.dayId, lat: null, lng: null, address: null, time: null, notes: null, ...o.fields };
+  return {
+    id: o.stopId,
+    day_id: o.dayId,
+    lat: null,
+    lng: null,
+    address: null,
+    time: null,
+    notes: null,
+    osm_ref: null,
+    category: null,
+    photo_url: null,
+    website: null,
+    opening_hours: null,
+    ...o.fields,
+  };
 }
 
 export function applyToTrip(trip, o) {
@@ -133,7 +147,7 @@ export function applyToTrip(trip, o) {
       if (trip.days.some((d) => d.id === o.dayId)) return trip;
       return {
         ...trip,
-        days: renumber([...trip.days, { id: o.dayId, trip_id: trip.id, date: null, title: null, notes: null, ...o.fields, stops: [] }]),
+        days: renumber([...trip.days, { id: o.dayId, trip_id: trip.id, date: null, title: null, notes: null, travel_mode: null, ...o.fields, stops: [] }]),
       };
     case "updateDay":
       return mapDays(trip, (d) => (d.id === o.dayId ? { ...d, ...o.fields } : d));
