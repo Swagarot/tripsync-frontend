@@ -12,13 +12,14 @@ const memory = new Map();
 
 // The version prefix makes routes stored by older app versions be ignored:
 // v1 remembered "no route" for stops far from a road (the backend now searches
-// wider); v2 routes lack `snapped` (where each stop meets the road).
+// wider); v2 routes lack `snapped` (where each stop meets the road); v3 transit
+// routes could contain loops (the backend now picks sensible journeys).
 // Transit depends on the date (timetables), so it's part of the key.
 // Transit names (lines, stations) come in the user's language, so for transit
 // the language is part of the key too.
 export function routeKey(mode, points, date = null, lang = "en") {
   const coords = points.map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join(";");
-  return `v3|${mode}|${mode === "transit" ? `${date ?? ""}|${lang}|` : ""}${coords}`;
+  return `v4|${mode}|${mode === "transit" ? `${date ?? ""}|${lang}|` : ""}${coords}`;
 }
 
 export async function loadRoute(mode, points, date = null, lang = "en") {
