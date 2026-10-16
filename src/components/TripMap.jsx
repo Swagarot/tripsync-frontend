@@ -11,14 +11,23 @@ import { pin } from "./map.js";
 // shows the trip's destination ("Where to?"), else the whole world.
 function FitTo({ points, fallback }) {
   const map = useMap();
+  const { drawerOpen, side } = useTripView();
+  // Refit only when the pins change, not when the drawer opens or closes (the
+  // map jumping around then would be annoying); the padding just uses the
+  // drawer's state at that moment.
   const key = points.map((p) => p.join(",")).join("|") + `#${fallback?.join(",")}`;
   useEffect(() => {
-    // The panel covers part of the map (left on desktop, bottom on phones):
-    // fit the pins into the part that's actually visible.
+    // Fit the pins into the part of the map you can actually see: the search
+    // bar covers the top; an open drawer covers one side (desktop) or the
+    // bottom sheet covers the lower part (phone).
     const desktop = window.matchMedia("(min-width: 900px)").matches;
+    const drawer = desktop && drawerOpen ? 440 : 0;
     const padding = desktop
-      ? { paddingTopLeft: [500, 50], paddingBottomRight: [50, 50] }
-      : { paddingTopLeft: [30, 30], paddingBottomRight: [30, window.innerHeight * 0.5] };
+      ? {
+          paddingTopLeft: [(side === "left" ? drawer : 0) + 40, 90],
+          paddingBottomRight: [(side === "right" ? drawer : 0) + 40, 40],
+        }
+      : { paddingTopLeft: [30, 90], paddingBottomRight: [30, window.innerHeight * (drawerOpen ? 0.5 : 0.18)] };
     // One point (or a destination) becomes a small box around it, so the
     // same padding logic applies.
     const around = ([lat, lng], d) => [[lat - d, lng - d], [lat + d, lng + d]];

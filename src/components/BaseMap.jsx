@@ -13,7 +13,7 @@ import rtlPluginUrl from "../../node_modules/@mapbox/mapbox-gl-rtl-text/dist/map
 import { useEffect, useRef } from "react";
 import { TileLayer, useMap } from "react-leaflet";
 import { ATTRIBUTION as OSM_ATTRIBUTION, TILE_URL as OSM_TILES } from "./map.js";
-import { useLanguage } from "../settings.js";
+import { effectiveTheme, useLanguage, useTheme } from "../settings.js";
 
 // The map's background, drawn in the browser from vector tiles
 // (OpenFreeMap: free, no key, OpenStreetMap data) by MapLibre, inside Leaflet
@@ -25,7 +25,12 @@ import { useLanguage } from "../settings.js";
 // 渋谷). Vector tiles carry every name OpenStreetMap knows (name:en,
 // name:he, name:ja...) and the browser draws the labels, so they can be shown
 // in the language the user picked.
-const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+// One OpenFreeMap style per app theme, so the map matches the panel around it.
+const STYLES = {
+  light: "https://tiles.openfreemap.org/styles/liberty",
+  dark: "https://tiles.openfreemap.org/styles/dark",
+  dim: "https://tiles.openfreemap.org/styles/fiord", // slate blue, like the Dim theme
+};
 const ATTRIBUTION =
   '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
 
@@ -90,6 +95,7 @@ function RasterFallback() {
     <TileLayer
       url={OSM_TILES}
       noWrap
+      className="raster-tiles"
       attribution={`${OSM_ATTRIBUTION} · basic map: this browser has WebGL2 off, so labels stay in the local language`}
     />
   );
@@ -98,17 +104,32 @@ function RasterFallback() {
 function VectorBaseMap() {
   const map = useMap();
   const lang = useLanguage();
+  const themeKey = useTheme();
   const layerRef = useRef(null);
+  const styleRef = useRef(null); // the style the map currently uses
 
   useEffect(() => {
     ensureRtlPlugin();
-    const layer = maplibreGL({ style: STYLE_URL, attribution: ATTRIBUTION, interactive: false }).addTo(map);
+    const style = STYLES[effectiveTheme()] ?? STYLES.light;
+    styleRef.current = style;
+    const layer = maplibreGL({ style, attribution: ATTRIBUTION, interactive: false }).addTo(map);
     layerRef.current = layer;
     return () => {
       layer.remove();
       layerRef.current = null;
     };
   }, [map]);
+
+  // Theme changed: load the matching style (labels are re-applied on its
+  // style.load below).
+  useEffect(() => {
+    const glMap = layerRef.current?.getMaplibreMap();
+    const style = STYLES[effectiveTheme()] ?? STYLES.light;
+    if (glMap && style !== styleRef.current) {
+      styleRef.current = style;
+      glMap.setStyle(style);
+    }
+  }, [themeKey]);
 
   useEffect(() => {
     const glMap = layerRef.current?.getMaplibreMap();

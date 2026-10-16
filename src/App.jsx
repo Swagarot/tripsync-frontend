@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
-import { Link, Navigate, Route, Routes } from "react-router";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router";
 import { useAuth } from "./auth/context.js";
+import AppMenu from "./components/AppMenu.jsx";
 import { SyncBar, UpdateBanner } from "./components/common.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 // Each page is its own JS file, downloaded when it's first opened: the login
@@ -8,8 +9,6 @@ import LoginPage from "./pages/LoginPage.jsx";
 // The service worker still precaches all of them, so they work offline.
 const TripPage = lazy(() => import("./pages/TripPage.jsx"));
 const TripsPage = lazy(() => import("./pages/TripsPage.jsx"));
-import { LANGUAGES, setLanguage, useLanguage } from "./settings.js";
-import { useSyncStatus } from "./store/hooks.js";
 
 // Pages that need a logged-in user. While the stored token is still being
 // checked (user === undefined) show nothing instead of flashing the login page.
@@ -21,42 +20,26 @@ function RequireLogin({ children }) {
 }
 
 function Header() {
-  const { user, logout } = useAuth();
-  const { pending } = useSyncStatus();
-  const language = useLanguage();
-  if (!user) return null;
-
-  // Logging out wipes this device's copy, including changes not yet synced.
-  const confirmLogout = () => {
-    if (pending === 0 || window.confirm(`${pending} change(s) haven't synced yet and will be lost. Log out anyway?`)) {
-      logout();
-    }
-  };
+  const { user } = useAuth();
+  const { pathname } = useLocation();
+  const [menu, setMenu] = useState(false);
+  // The trip page is all map, like Google Maps: its menu lives in the drawer.
+  if (!user || pathname.startsWith("/trips/")) return null;
 
   return (
     <header className="app-header">
       <Link to="/" className="brand">
         <span aria-hidden="true">✈</span> TripSync
       </Link>
-      <div className="account">
-        {/* Language for names: map labels, transit, place details. */}
-        <select
-          className="language-select"
-          aria-label="Language for map and place names"
-          title="Language for map and place names"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-        >
-          {Object.entries(LANGUAGES).map(([code, name]) => (
-            <option key={code} value={code}>
-              🌐 {name}
-            </option>
-          ))}
-        </select>
-        <span className="muted small email">{user.email}</span>
-        <button className="link" onClick={confirmLogout}>
-          Log out
+      <div className="header-menu">
+        <button className="icon-btn" aria-label="Menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+          ☰
         </button>
+        {menu && (
+          <div className="menu-popover" onClick={(e) => e.stopPropagation()}>
+            <AppMenu onNavigate={() => setMenu(false)} />
+          </div>
+        )}
       </div>
     </header>
   );

@@ -56,3 +56,71 @@ export function useLanguage() {
     getLanguage,
   );
 }
+
+// --- Colour theme ---------------------------------------------------------------
+// "system" follows the device's light/dark setting. The chosen theme is written
+// to <html data-theme="light|dark|dim">; index.css defines the colours for each,
+// and the map switches to a matching style (BaseMap.jsx).
+export const THEMES = { system: "System", light: "Light", dark: "Dark", dim: "Dim" };
+
+const THEME_KEY = "tripsync.theme";
+const themeListeners = new Set();
+const darkQuery = typeof window !== "undefined" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+function initialTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved && THEMES[saved]) return saved;
+  } catch {
+    // fall through
+  }
+  return "system";
+}
+
+let theme = initialTheme();
+
+// The theme actually shown: "system" resolved to light or dark.
+export function effectiveTheme() {
+  if (theme !== "system") return theme;
+  return darkQuery?.matches ? "dark" : "light";
+}
+
+function applyTheme() {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.theme = effectiveTheme();
+  // The browser's own controls (scrollbars, date pickers) follow too.
+  document.documentElement.style.colorScheme = effectiveTheme() === "light" ? "light" : "dark";
+  themeListeners.forEach((l) => l());
+}
+
+export function setTheme(value) {
+  if (!THEMES[value]) return;
+  theme = value;
+  try {
+    localStorage.setItem(THEME_KEY, value);
+  } catch {
+    // applies until reload
+  }
+  applyTheme();
+}
+
+export function getTheme() {
+  return theme;
+}
+
+// Re-renders when the theme (or, in "system" mode, the device setting) changes.
+export function useTheme() {
+  return useSyncExternalStore(
+    (l) => {
+      themeListeners.add(l);
+      return () => themeListeners.delete(l);
+    },
+    () => `${theme}|${effectiveTheme()}`,
+  );
+}
+
+darkQuery?.addEventListener("change", applyTheme);
+applyTheme();
+
+// Hebrew is written right to left: the panel and search bar sit on the right.
+export const RTL_LANGUAGES = new Set(["he"]);

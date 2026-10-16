@@ -1,7 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import AppMenu from "../components/AppMenu.jsx";
 import { TripForm } from "../components/forms.jsx";
-import { formatRange } from "../dates.js";
+import PlaceSearch from "../components/PlaceSearch.jsx";
+import { addDays, formatDay, formatRange } from "../dates.js";
 import { centerOf } from "../geo.js";
 import { useStore, useTrip } from "../store/hooks.js";
 import { op } from "../store/ops.js";
@@ -11,14 +13,15 @@ import ExpensesTab from "../trip/ExpensesTab.jsx";
 import IdeasTab from "../trip/IdeasTab.jsx";
 import ItineraryTab from "../trip/ItineraryTab.jsx";
 import NotesTab from "../trip/NotesTab.jsx";
-import { useLanguage } from "../settings.js";
+import { RTL_LANGUAGES, useLanguage } from "../settings.js";
 import { dayRouteRequest, loadRoute } from "../trip/routes.js";
 import { cellKey, dayLocation, dayWeather, loadForecast } from "../trip/weather.js";
 import WeatherTab from "../trip/WeatherTab.jsx";
 
-// Map-first trip page: the map fills the screen, and everything else lives in
-// a panel over it. Desktop: a frosted panel on the left (see-through until you
-// use it, can be collapsed). Phone: a bottom sheet you drag up and down.
+// Map-first trip page, laid out like Google Maps: the map fills the screen, a
+// search bar floats on top (quick add), and everything else lives in a drawer
+// that ☰ opens: from the left, or the right for right-to-left languages.
+// On phones the drawer is a bottom sheet you drag up and down.
 const TripMap = lazy(() => import("../components/TripMap.jsx"));
 
 const TABS = [
@@ -113,27 +116,34 @@ export default function TripPage() {
   const [highlight, setHighlight] = useState(null);
   const [preview, setPreview] = useState(null);
   const [tab, setTab] = useState("itinerary");
+  // Like Google Maps: the map first, the drawer closed until ☰ opens it.
+  // (On phones "closed" = the bottom sheet's small peek, "open" = half height.)
+  const [open, setOpen] = useState(false);
   const routeFor = useRoutes(trip?.days ?? []);
   const weatherFor = useWeather(trip);
+  const language = useLanguage();
+  // Hebrew reads right to left, so the drawer and search bar sit on the right.
+  const side = RTL_LANGUAGES.has(language) ? "right" : "left";
 
   // Show the stored copy right away, fetch a fresh one in the background.
   useEffect(() => {
     refreshTrip(tripId);
   }, [tripId]);
 
-  // Clicking a pin opens the right tab and scrolls to the stop or idea.
+  // Clicking a pin opens the drawer on the right tab and scrolls to the stop.
   const focus = useCallback(
     (id) => {
       setHighlight(id);
+      setOpen(true);
       if (trip?.ideas?.some((i) => i.id === id)) setTab("ideas");
       else if (trip?.days.some((d) => d.stops.some((s) => s.id === id))) setTab("itinerary");
-      setTimeout(() => document.getElementById(`stop-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+      setTimeout(() => document.getElementById(`stop-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
     },
     [trip],
   );
   const view = useMemo(
-    () => ({ highlight, setHighlight, preview, setPreview, focus, routeFor, weatherFor }),
-    [highlight, preview, focus, routeFor, weatherFor],
+    () => ({ highlight, setHighlight, preview, setPreview, focus, routeFor, weatherFor, drawerOpen: open, side }),
+    [highlight, preview, focus, routeFor, weatherFor, open, side],
   );
 
   if (!trip) {
@@ -157,37 +167,80 @@ export default function TripPage() {
   const near = centerOf(pinned) ?? (trip.dest_lat != null ? { lat: trip.dest_lat, lng: trip.dest_lng } : null);
   const badDays = trip.days.filter((d) => weatherFor(d)?.warnings.some((w) => w.level === "warn")).length;
 
+  // Where the search bar can put a place: any day, a brand-new day, or Ideas.
+  const targets = [
+    ...trip.days.map((d, i) => ({ id: d.id, label: `Day ${i + 1}${d.date ? ` · ${formatDay(d.date)}` : ""}` })),
+    { id: "new-day", label: "A new day" },
+    { id: "ideas", label: "Ideas (no day yet)" },
+  ];
+
+  async function quickAdd(fields, target) {
+    if (target === "ideas") return dispatch(op.createItem("ideas", trip.id, fields));
+    let dayId = target;
+    if (target === "new-day") {
+      const last = trip.days.at(-1)?.date;
+      const newDay = op.createDay(trip.id, { date: last ? addDays(last, 1) : (trip.start_date ?? null) });
+      await dispatch(newDay);
+      dayId = newDay.dayId;
+    }
+    return dispatch(op.createStop(trip.id, dayId, fields));
+  }
+
   return (
     <TripViewContext.Provider value={view}>
-      <main className="trip-screen">
+      <main className={`trip-screen side-${side}${open ? " drawer-open" : ""}`}>
         <div className="map-layer">
           <Suspense fallback={<div className="map map-placeholder">Loading map…</div>}>
             <TripMap days={trip.days} trip={trip} />
           </Suspense>
         </div>
-        <Panel trip={trip} tab={tab} setTab={setTab} badDays={badDays}>
+        <PlaceSearch
+          compact
+          near={near}
+          targets={targets}
+          addLabel="Add"
+          onAdd={quickAdd}
+          leading={
+            <button
+              className="icon-btn menu-btn"
+              aria-label={open ? "Close trip panel" : "Open trip panel"}
+              aria-expanded={open}
+              onClick={() => setOpen((o) => !o)}
+            >
+              ☰
+            </button>
+          }
+        />
+        <Drawer trip={trip} tab={tab} setTab={setTab} badDays={badDays} open={open} setOpen={setOpen}>
           {tab === "itinerary" && <ItineraryTab trip={trip} near={near} />}
           {tab === "ideas" && <IdeasTab trip={trip} near={near} />}
           {tab === "expenses" && <ExpensesTab trip={trip} />}
           {tab === "notes" && <NotesTab key={trip.id} trip={trip} />}
           {tab === "weather" && <WeatherTab trip={trip} />}
-        </Panel>
+        </Drawer>
       </main>
     </TripViewContext.Provider>
   );
 }
 
-// --- The panel / bottom sheet ---------------------------------------------------
+// --- The drawer (desktop) / bottom sheet (phone) ---------------------------------
 
-const SHEET_SNAPS = { peek: 0.18, half: 0.5, full: 0.92 }; // share of the screen height
+const SHEET_SNAPS = { peek: 0.16, half: 0.5, full: 0.92 }; // share of the screen height
 
-function Panel({ trip, tab, setTab, badDays, children }) {
+function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const [sheet, setSheet] = useState("half");
+  const [full, setFull] = useState(false); // phone: half or full height when open
   const [dragHeight, setDragHeight] = useState(null);
   const drag = useRef(null);
+  const sheet = !open ? "peek" : full ? "full" : "half";
+
+  // Desktop: Escape closes the drawer.
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && isDesktop() && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setOpen]);
 
   // Phone: dragging the handle resizes the sheet live; letting go snaps it to
   // the nearest of peek / half / full.
@@ -206,11 +259,19 @@ function Panel({ trip, tab, setTab, badDays, children }) {
     if (dragHeight != null) {
       const share = dragHeight / window.innerHeight;
       const nearest = Object.entries(SHEET_SNAPS).sort((a, b) => Math.abs(a[1] - share) - Math.abs(b[1] - share))[0][0];
-      setSheet(nearest);
+      setOpen(nearest !== "peek");
+      setFull(nearest === "full");
     }
     setDragHeight(null);
   }
-  const cycleSheet = () => setSheet((s) => (s === "peek" ? "half" : s === "half" ? "full" : "peek"));
+  const cycleSheet = () => {
+    if (!open) setOpen(true);
+    else if (!full) setFull(true);
+    else {
+      setFull(false);
+      setOpen(false);
+    }
+  };
 
   function deleteTrip() {
     if (!window.confirm(`Delete "${trip.name}" with everything in it?`)) return;
@@ -218,18 +279,15 @@ function Panel({ trip, tab, setTab, badDays, children }) {
     navigate("/");
   }
 
-  if (collapsed) {
-    return (
-      <button className="panel-reopen" onClick={() => setCollapsed(false)}>
-        ☰ {trip.name}
-      </button>
-    );
-  }
-
   const style = dragHeight != null ? { "--sheet-height": `${dragHeight}px` } : undefined;
 
   return (
-    <aside className={`panel sheet-${sheet}${dragHeight != null ? " dragging" : ""}`} style={style} aria-label="Trip planner">
+    <aside
+      className={`drawer sheet-${sheet}${open ? " open" : ""}${dragHeight != null ? " dragging" : ""}`}
+      style={style}
+      aria-label="Trip planner"
+      aria-hidden={!open && isDesktop() ? true : undefined}
+    >
       <div
         className="sheet-handle"
         role="button"
@@ -245,11 +303,8 @@ function Panel({ trip, tab, setTab, badDays, children }) {
         <span />
       </div>
 
-      <header className="panel-head">
+      <header className="drawer-head">
         <div className="panel-title">
-          <Link to="/" className="back small">
-            ← All trips
-          </Link>
           <h1>{trip.name}</h1>
           <p className="muted small">
             {[trip.destination, formatRange(trip.start_date, trip.end_date), `${trip.days.length} day${trip.days.length === 1 ? "" : "s"}`]
@@ -259,25 +314,27 @@ function Panel({ trip, tab, setTab, badDays, children }) {
         </div>
         <div className="panel-actions">
           <button onClick={() => setEditing((v) => !v)}>{editing ? "Close" : "Edit"}</button>
-          <button className="collapse-btn" aria-label="Hide panel" onClick={() => setCollapsed(true)}>
-            ⟨
+          <button className="icon-btn close-btn" aria-label="Close trip panel" onClick={() => setOpen(false)}>
+            ✕
           </button>
         </div>
       </header>
 
       {editing ? (
-        <div className="tab-body">
-          <TripForm
-            trip={trip}
-            onCancel={() => setEditing(false)}
-            onSubmit={async (values) => {
-              await dispatch(op.updateTrip(trip.id, values));
-              setEditing(false);
-            }}
-          />
-          <button className="danger link" onClick={deleteTrip}>
-            Delete trip
-          </button>
+        <div className="drawer-body">
+          <div className="tab-body">
+            <TripForm
+              trip={trip}
+              onCancel={() => setEditing(false)}
+              onSubmit={async (values) => {
+                await dispatch(op.updateTrip(trip.id, values));
+                setEditing(false);
+              }}
+            />
+            <button className="danger link" onClick={deleteTrip}>
+              Delete trip
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -289,18 +346,28 @@ function Panel({ trip, tab, setTab, badDays, children }) {
                 aria-selected={tab === id}
                 onClick={() => {
                   setTab(id);
-                  if (sheet === "peek") setSheet("half");
+                  setOpen(true);
                 }}
               >
                 {label}
-                {id === "weather" && badDays > 0 && <span className="tab-badge" title={`${badDays} day(s) with a weather warning`}>{badDays}</span>}
+                {id === "weather" && badDays > 0 && (
+                  <span className="tab-badge" title={`${badDays} day(s) with a weather warning`}>
+                    {badDays}
+                  </span>
+                )}
                 {id === "ideas" && trip.ideas?.length > 0 && <span className="tab-count">{trip.ideas.length}</span>}
               </button>
             ))}
           </nav>
-          <div className="panel-body">{children}</div>
+          <div className="drawer-body">{children}</div>
         </>
       )}
+
+      {/* App-wide settings: all trips, names language, theme, account. */}
+      <details className="drawer-footer">
+        <summary>☰ Menu &amp; settings</summary>
+        <AppMenu />
+      </details>
     </aside>
   );
 }

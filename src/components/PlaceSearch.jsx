@@ -9,10 +9,21 @@ import { useTripView } from "../trip/context.js";
 // website, from /places/<ref>) -> add it to the day.
 // Results are biased towards `near` (the middle of the trip's stops), so
 // "cathedral" finds the one in the city being planned.
-export default function PlaceSearch({ near, onAdd, onCustom, onCancel, initialQuery = "", addLabel = "Add to day" }) {
+//
+// Two looks:
+//   inline (default): inside a day ("+ Add a place"), with a Cancel button;
+//   compact: the search bar floating on top of the map (like Google Maps):
+//     always there, results drop down while you type, `leading` (the ☰
+//     button) sits inside the bar, and `targets` lets you pick where the
+//     place goes (a day, or Ideas). After adding it resets for the next one.
+export default function PlaceSearch({
+  near, onAdd, onCustom, onCancel, initialQuery = "", addLabel = "Add to day",
+  compact = false, leading = null, targets = null,
+}) {
   const { online } = useStore();
   const { setPreview } = useTripView();
   const [query, setQuery] = useState(initialQuery);
+  const [done, setDone] = useState(null); // "Added to Day 1" after a compact add
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
@@ -69,6 +80,8 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel, initialQu
   }
 
   const [adding, setAdding] = useState(false);
+  const [target, setTarget] = useState(null);
+  const chosenTarget = target ?? targets?.[0]?.id ?? null;
 
   async function add() {
     // Tapped "Add" before the details arrived? Wait for them (a second or
@@ -76,7 +89,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel, initialQu
     setAdding(true);
     const details = selected.details ?? (await selected.pending);
     const place = { ...selected.result, ...(details ?? {}) };
-    onAdd({
+    await onAdd({
       name: place.name.slice(0, 200),
       address: place.address,
       lat: place.lat,
@@ -86,7 +99,89 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel, initialQu
       photo_url: place.photo_url ?? null,
       website: place.website ?? null,
       opening_hours: place.opening_hours ?? null,
-    });
+    }, chosenTarget);
+    if (compact) {
+      // Ready for the next place; say where this one went.
+      const label = targets?.find((t) => t.id === chosenTarget)?.label;
+      setDone(`Added "${place.name}"${label ? ` to ${label}` : ""}`);
+      setTimeout(() => setDone(null), 3000);
+      setQuery("");
+      setSelected(null);
+      setResults([]);
+      setAdding(false);
+      // Next place defaults to the first choice again (Day 1), not to wherever
+      // the last one went: "A new day" twice would make two new days.
+      setTarget(null);
+    }
+  }
+
+  if (compact) {
+    const open = query.trim().length >= 2 || selected;
+    const clear = () => {
+      setQuery("");
+      setSelected(null);
+    };
+    return (
+      <div className={`top-search${open ? " open" : ""}`}>
+        <div className="top-search-bar">
+          {leading}
+          <input
+            type="search"
+            placeholder={online ? "Search places to add…" : "Search needs a connection"}
+            aria-label="Search places"
+            disabled={!online}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelected(null);
+            }}
+            onKeyDown={(e) => e.key === "Escape" && clear()}
+          />
+          {query && (
+            <button className="icon-btn" aria-label="Clear search" onClick={clear}>
+              ✕
+            </button>
+          )}
+        </div>
+        {done && !open && <div className="top-search-done" role="status">✓ {done}</div>}
+        {open && (
+          <div className="top-search-results">
+            {error && <p className="error">{error.message}</p>}
+            {selected ? (
+              <PlaceCard
+                selected={selected}
+                adding={adding}
+                addLabel={addLabel}
+                onAdd={add}
+                onBack={() => setSelected(null)}
+                targets={targets}
+                target={chosenTarget}
+                onTarget={setTarget}
+              />
+            ) : (
+              <>
+                {searching && <p className="muted small">Searching…</p>}
+                {!searching && results.length === 0 && !error && <p className="muted small">No places found.</p>}
+                <ul className="results">
+                  {results.map((r) => (
+                    <li key={r.osm_ref}>
+                      <button className="result" onClick={() => pick(r)}>
+                        <span className="result-name">{r.name}</span>
+                        <span className="muted small">{[r.category, r.address].filter(Boolean).join(" · ")}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <p className="attribution">
+              Search: <a href="https://photon.komoot.io" target="_blank" rel="noreferrer">Photon</a> ·{" "}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a>
+            </p>
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (!online) {
@@ -153,7 +248,7 @@ export default function PlaceSearch({ near, onAdd, onCustom, onCancel, initialQu
   );
 }
 
-function PlaceCard({ selected, adding, addLabel, onAdd, onBack }) {
+function PlaceCard({ selected, adding, addLabel, onAdd, onBack, targets, target, onTarget }) {
   const { result, details, loading } = selected;
   const place = { ...result, ...(details ?? {}) };
   const facts = [
@@ -197,10 +292,19 @@ function PlaceCard({ selected, adding, addLabel, onAdd, onBack }) {
           </p>
         )}
         <div className="form-actions">
+          {targets && (
+            <select aria-label="Add to" value={target ?? ""} onChange={(e) => onTarget(e.target.value)}>
+              {targets.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          )}
           <button className="primary" onClick={onAdd} disabled={adding}>
             {adding ? "Saving…" : addLabel}
           </button>
-          <button onClick={onBack}>Back to results</button>
+          <button onClick={onBack}>Back</button>
         </div>
       </div>
     </div>

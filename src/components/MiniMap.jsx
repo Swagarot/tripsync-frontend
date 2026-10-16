@@ -26,7 +26,7 @@ export default function MiniMap({ points, destination }) {
 
   return (
     <MapContainer className="mini-map" {...view} {...interaction}>
-      <TileLayer url={TILE_URL} />
+      <TileLayer url={TILE_URL} className="raster-tiles" />
       {points.length > 1 && <Polyline positions={points} pathOptions={{ color: "#0f6e6a", weight: 2, opacity: 0.7 }} />}
       {points.map((p, i) => (
         <CircleMarker key={i} center={p} radius={4} pathOptions={{ color: "#fff", weight: 1.5, fillColor: "#0f6e6a", fillOpacity: 1 }} />
