@@ -6,6 +6,7 @@
 // between the stops), callers fall back to straight lines.
 import { createStore, get, set } from "idb-keyval";
 import { api } from "../api.js";
+import { dayPoints } from "./stays.js";
 
 const idb = createStore("tripsync-routes", "routes");
 const memory = new Map();
@@ -49,9 +50,10 @@ export async function loadRoute(mode, points, date = null, lang = "en") {
   return value;
 }
 
-// The request for one day: its stops that have coordinates, in order.
-export function dayRouteRequest(day, lang = "en") {
-  const points = day.stops.filter((s) => s.lat != null).map((s) => [s.lat, s.lng]);
+// The request for one day: [start stay], its stops that have coordinates,
+// [end stay], in order (see stays.js).
+export function dayRouteRequest(day, lang = "en", lodgings = []) {
+  const points = dayPoints(day, lodgings).map((p) => [p.lat, p.lng]);
   if (points.length < 2) return null;
   const mode = day.travel_mode ?? "walk";
   const date = mode === "transit" ? (day.date ?? null) : null;

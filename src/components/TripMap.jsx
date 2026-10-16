@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo } from "react";
 import { MapContainer, Marker, Polyline, Tooltip, useMap, ZoomControl } from "react-leaflet";
 import { dayColor } from "../colors.js";
 import { distanceKm } from "../geo.js";
+import { effectiveTheme, useTheme } from "../settings.js";
+import { dayPoints } from "../trip/stays.js";
 import { useTripView } from "../trip/context.js";
 import BaseMap from "./BaseMap.jsx";
 import { pin } from "./map.js";
@@ -51,6 +53,13 @@ const WORLD_EDGES = [[-85, -200], [85, 200]];
 // lines between them. Plus, while searching, the results as small grey pins.
 export default function TripMap({ days, trip }) {
   const { highlight, focus, preview, routeFor, side } = useTripView();
+  useTheme(); // redraw lines when the theme changes
+  const dark = effectiveTheme() !== "light";
+  // Route lines get a light outline ("casing") underneath, like Google Maps:
+  // agencies' line colours can be very dark (Tokyo's Oedo line is navy) and
+  // would vanish on the dark map styles. Walking dots: light grey on dark maps.
+  const casing = { color: dark ? "#e8eaed" : "#ffffff", opacity: dark ? 0.55 : 0.9 };
+  const walkColor = dark ? "#c4c7cc" : "#6b675f";
 
   const routes = useMemo(
     () =>
@@ -58,8 +67,10 @@ export default function TripMap({ days, trip }) {
         day,
         color: dayColor(index),
         stops: day.stops.filter((s) => s.lat != null),
+        // The whole route including the stay it starts/ends at (stays.js).
+        points: dayPoints(day, trip.lodgings ?? []),
       })),
-    [days],
+    [days, trip.lodgings],
   );
   const stopPoints = routes.flatMap((r) => r.stops.map((s) => [s.lat, s.lng]));
   // While searching: the picked result, else all results.
@@ -88,7 +99,7 @@ export default function TripMap({ days, trip }) {
         fallback={trip.dest_lat != null ? [trip.dest_lat, trip.dest_lng, trip.dest_zoom ?? 10] : null}
       />
 
-      {routes.map(({ day, color, stops }) => (
+      {routes.map(({ day, color, stops, points }) => (
         <Fragment key={day.id}>
           {/* The real route when loaded, else dashed straight lines. Different
               keys on purpose: Leaflet keeps a line's old dash pattern when only
@@ -96,33 +107,41 @@ export default function TripMap({ days, trip }) {
           {routeFor(day)?.parts ? (
             // Transit: each part separately. Rides in the line's own colour,
             // walks as dots, legs without a journey as dashed straight lines.
-            routeFor(day).parts.map((part, i) => (
-              <Polyline
-                key={`part-${i}-${part.mode}`}
-                positions={part.points}
-                pathOptions={
-                  part.mode === "WALK"
-                    ? { color: "#6b675f", weight: 3, opacity: 0.8, dashArray: "1 6", lineCap: "round" }
-                    : part.mode === "NONE"
-                      ? { color, weight: 3, opacity: 0.6, dashArray: "6 6" }
-                      : { color: part.color ?? color, weight: 6, opacity: 0.9 }
-                }
-              />
-            ))
+            routeFor(day).parts.map((part, i) =>
+              part.mode === "WALK" ? (
+                <Polyline
+                  key={`part-${i}-walk`}
+                  positions={part.points}
+                  pathOptions={{ color: walkColor, weight: 3, opacity: 0.9, dashArray: "1 6", lineCap: "round" }}
+                />
+              ) : part.mode === "NONE" ? (
+                <Polyline
+                  key={`part-${i}-none`}
+                  positions={part.points}
+                  pathOptions={{ color, weight: 3, opacity: 0.7, dashArray: "6 6" }}
+                />
+              ) : (
+                <Fragment key={`part-${i}-ride`}>
+                  <Polyline positions={part.points} pathOptions={{ ...casing, weight: 10 }} />
+                  <Polyline positions={part.points} pathOptions={{ color: part.color ?? color, weight: 6, opacity: 0.95 }} />
+                </Fragment>
+              ),
+            )
           ) : routeFor(day) ? (
             <>
-              <Polyline key="route" positions={routeFor(day).geometry} pathOptions={{ color, weight: 5, opacity: 0.8 }} />
+              <Polyline key="route-casing" positions={routeFor(day).geometry} pathOptions={{ ...casing, weight: 9 }} />
+              <Polyline key="route" positions={routeFor(day).geometry} pathOptions={{ color, weight: 5, opacity: 0.9 }} />
               {/* The route starts at the road nearest each stop. Where that's
                   more than ~30 m away (an airport, a big park), a dotted
                   straight line shows the walk from the pin to the road. */}
-              {stops.map((stop, i) => {
+              {points.map((stop, i) => {
                 const joined = routeFor(day).snapped?.[i];
                 if (!joined || distanceKm(stop, { lat: joined[0], lng: joined[1] }) < 0.03) return null;
                 return (
                   <Polyline
-                    key={`walk-to-road-${stop.id}`}
+                    key={`walk-to-road-${stop.kind}-${stop.id}`}
                     positions={[[stop.lat, stop.lng], joined]}
-                    pathOptions={{ color: "#6b675f", weight: 3, opacity: 0.8, dashArray: "1 7", lineCap: "round" }}
+                    pathOptions={{ color: walkColor, weight: 3, opacity: 0.9, dashArray: "1 7", lineCap: "round" }}
                   />
                 );
               })}
@@ -131,7 +150,7 @@ export default function TripMap({ days, trip }) {
             stops.length > 1 && (
               <Polyline
                 key="straight"
-                positions={stops.map((s) => [s.lat, s.lng])}
+                positions={points.map((s) => [s.lat, s.lng])}
                 pathOptions={{ color, weight: 3, opacity: 0.6, dashArray: "6 6" }}
               />
             )
@@ -152,6 +171,17 @@ export default function TripMap({ days, trip }) {
           ))}
         </Fragment>
       ))}
+
+      {/* Where you're staying: one 🛏 pin per stay. */}
+      {(trip.lodgings ?? [])
+        .filter((s) => s.lat != null)
+        .map((stay) => (
+          <Marker key={stay.id} position={[stay.lat, stay.lng]} icon={pin("🛏", "#3b3f46")} zIndexOffset={800}>
+            <Tooltip direction="top" offset={[0, -14]}>
+              Stay: {stay.name}
+            </Tooltip>
+          </Marker>
+        ))}
 
       {/* Saved ideas: hollow pins, not yet part of any day. */}
       {(trip.ideas ?? [])

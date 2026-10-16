@@ -52,7 +52,7 @@ export const op = {
   deleteItem: (kind, tripId, itemId) => ({ type: "deleteItem", kind, tripId, itemId }),
 };
 
-export const ITEM_KINDS = ["ideas", "expenses", "checklist"];
+export const ITEM_KINDS = ["ideas", "expenses", "checklist", "lodgings"];
 
 // --- The API request for an op ------------------------------------------------
 
@@ -160,6 +160,7 @@ export function applyToTrip(trip, o) {
       ideas: [],
       expenses: [],
       checklist: [],
+      lodgings: [],
     };
   }
   if (!trip || trip.id !== o.tripId) return trip;

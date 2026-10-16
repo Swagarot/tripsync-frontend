@@ -15,6 +15,11 @@
   --ok: #2f8f4e;
   --warn: #c48a12;
   --radius: 12px;
+  /* Outlines of things you click or type in (buttons, inputs, dropdowns, empty
+     stars). In the dark themes these are lighter than --border so they reach
+     3:1 contrast, the WCAG minimum for controls; --border stays subtle for
+     dividers between sections. */
+  --control-border: var(--border);
   --shadow: 0 1px 2px rgb(0 0 0 / 5%), 0 2px 8px rgb(0 0 0 / 4%);
 
   font: 16px/1.5 system-ui, "Segoe UI", Roboto, sans-serif;
@@ -24,6 +29,7 @@
 }
 
 :root[data-theme="dark"] {
+  --control-border: #696a68; /* 3.1:1 on the panel, 3.4:1 on the page */
   --bg: #121313;
   --surface: #1c1e1e;
   --text: #ecebe7;
@@ -39,6 +45,7 @@
 
 /* "Dim": the dark navy Twitter used to offer, easier on the eyes than black. */
 :root[data-theme="dim"] {
+  --control-border: #6a7078; /* 3.0:1 on the panel, 3.3:1 on the page */
   --bg: #15202b;
   --surface: #1e2732;
   --text: #f7f9f9;
@@ -1601,4 +1608,132 @@ button.more.has-memories {
   .trip-screen .leaflet-top {
     top: 60px;
   }
+}
+
+/* ---- Visibility in the dark themes ---- */
+
+button,
+select,
+input,
+textarea,
+.segmented {
+  border-color: var(--control-border);
+}
+button.link,
+button.more,
+.grip,
+.icon-btn,
+.tabs-bar button,
+.top-search-bar input,
+.stars button,
+.photo-grid figcaption button {
+  border-color: transparent;
+}
+button:disabled {
+  opacity: 0.45;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.stars,
+.stars button {
+  color: var(--control-border);
+}
+.tab-count {
+  background: var(--control-border);
+  color: var(--surface);
+}
+.top-search .result:hover,
+.top-search .result:focus-visible {
+  background: var(--accent-soft);
+}
+
+/* Leaflet's own controls default to white; follow the theme instead. */
+/* ".trip-screen" in front: leaflet.css loads after this file (with the map
+   code) and would otherwise win with its equally specific white defaults. */
+.trip-screen .leaflet-bar a,
+.trip-screen .leaflet-bar a:hover {
+  background: var(--surface);
+  color: var(--text);
+  border-bottom-color: var(--control-border);
+}
+.trip-screen .leaflet-bar {
+  border: 1px solid var(--control-border) !important;
+  box-shadow: var(--shadow) !important;
+}
+.trip-screen .leaflet-bar a.leaflet-disabled {
+  background: var(--bg);
+  color: var(--muted);
+}
+.trip-screen .leaflet-control-attribution {
+  background: color-mix(in srgb, var(--surface) 85%, transparent) !important;
+  color: var(--muted);
+}
+.trip-screen .leaflet-control-attribution a {
+  color: var(--accent);
+}
+.trip-screen .leaflet-tooltip {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--control-border);
+  box-shadow: var(--shadow);
+}
+.leaflet-tooltip-top::before {
+  border-top-color: var(--control-border);
+}
+.leaflet-tooltip-bottom::before {
+  border-bottom-color: var(--control-border);
+}
+
+/* ---- Stays (where you sleep) ---- */
+
+.stays {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.stays-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stay-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.stay-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.stay-dates input {
+  padding: 6px 8px;
+}
+.stay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.stay-icon {
+  font-size: 1.1rem;
 }

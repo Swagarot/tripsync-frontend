@@ -64,3 +64,26 @@ describe("stop picture", () => {
     expect(coverUrl({ photo_url: null })).toBe(null);
   });
 });
+
+describe("stays: where a day starts and ends", async () => {
+  const { dayEnds, dayPoints } = await import("./stays.js");
+  const tokyo = { id: "h1", name: "Tokyo hotel", lat: 35.69, lng: 139.7, check_in: "2027-04-01", check_out: "2027-04-04", bookends: true };
+  const kyoto = { id: "h2", name: "Kyoto ryokan", lat: 35.0, lng: 135.77, check_in: "2027-04-04", check_out: "2027-04-07", bookends: true };
+  const day = (date, stops = []) => ({ date, stops });
+
+  it("a normal day inside a stay starts and ends there", () => {
+    expect(dayEnds(day("2027-04-02"), [tokyo, kyoto])).toEqual({ start: tokyo, end: tokyo });
+  });
+  it("the moving day starts at the old place and ends at the new one", () => {
+    expect(dayEnds(day("2027-04-04"), [tokyo, kyoto])).toEqual({ start: tokyo, end: kyoto });
+  });
+  it("nothing outside the dates, without a date, or with the switch off", () => {
+    expect(dayEnds(day("2027-04-09"), [tokyo, kyoto])).toEqual({ start: null, end: null });
+    expect(dayEnds(day(null), [tokyo])).toEqual({ start: null, end: null });
+    expect(dayEnds(day("2027-04-02"), [{ ...tokyo, bookends: false }])).toEqual({ start: null, end: null });
+  });
+  it("puts the stay around the day's stops in the route", () => {
+    const stops = [{ id: "s1", lat: 35.71, lng: 139.79 }, { id: "s2", lat: null, lng: null }];
+    expect(dayPoints(day("2027-04-02", stops), [tokyo]).map((p) => p.kind)).toEqual(["start", "stop", "end"]);
+  });
+});

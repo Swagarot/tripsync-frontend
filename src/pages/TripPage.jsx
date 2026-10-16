@@ -32,16 +32,18 @@ const TABS = [
   ["weather", "Weather"],
 ];
 
+const NO_STAYS = []; // a stable empty list (a new [] each render would re-run effects)
+
 const isDesktop = () => window.matchMedia("(min-width: 900px)").matches;
 
 // Loads a route for every day with 2+ placed stops, once the stops have
 // stopped changing for a moment (dragging fires several changes in a row and
 // each route request counts against the daily quota). routeFor(day) only
 // hands out a route that matches the day's CURRENT stops and mode.
-function useRoutes(days) {
+function useRoutes(days, lodgings) {
   const [routes, setRoutes] = useState({});
   const lang = useLanguage();
-  const requests = days.map((d) => dayRouteRequest(d, lang)).filter(Boolean);
+  const requests = days.map((d) => dayRouteRequest(d, lang, lodgings)).filter(Boolean);
   // A plain string as the effect's dependency: it only changes when some
   // day's stops or mode really change, not on every render.
   const signature = JSON.stringify(requests.map((r) => [r.key, r.mode, r.points, r.date, r.lang]));
@@ -63,11 +65,11 @@ function useRoutes(days) {
 
   return useCallback(
     (day) => {
-      const request = dayRouteRequest(day, lang);
+      const request = dayRouteRequest(day, lang, lodgings);
       const route = request && routes[request.key];
       return route && !route.none ? route : null;
     },
-    [routes, lang],
+    [routes, lang, lodgings],
   );
 }
 
@@ -119,7 +121,7 @@ export default function TripPage() {
   // Like Google Maps: the map first, the drawer closed until ☰ opens it.
   // (On phones "closed" = the bottom sheet's small peek, "open" = half height.)
   const [open, setOpen] = useState(false);
-  const routeFor = useRoutes(trip?.days ?? []);
+  const routeFor = useRoutes(trip?.days ?? [], trip?.lodgings ?? NO_STAYS);
   const weatherFor = useWeather(trip);
   const language = useLanguage();
   // Hebrew reads right to left, so the drawer and search bar sit on the right.
@@ -172,10 +174,17 @@ export default function TripPage() {
     ...trip.days.map((d, i) => ({ id: d.id, label: `Day ${i + 1}${d.date ? ` · ${formatDay(d.date)}` : ""}` })),
     { id: "new-day", label: "A new day" },
     { id: "ideas", label: "Ideas (no day yet)" },
+    { id: "stay", label: "Where I'm staying" },
   ];
 
   async function quickAdd(fields, target) {
     if (target === "ideas") return dispatch(op.createItem("ideas", trip.id, fields));
+    if (target === "stay") {
+      // Dates default to the whole trip; adjust them in "Where you're staying".
+      return dispatch(op.createItem("lodgings", trip.id, {
+        ...fields, check_in: trip.start_date ?? null, check_out: trip.end_date ?? null, bookends: true,
+      }));
+    }
     let dayId = target;
     if (target === "new-day") {
       const last = trip.days.at(-1)?.date;

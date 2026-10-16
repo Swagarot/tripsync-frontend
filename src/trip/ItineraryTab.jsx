@@ -30,6 +30,8 @@ import { dispatch } from "../store/store.js";
 import { categoryIcon } from "./categories.js";
 import Memories, { Stars } from "./Memories.jsx";
 import { coverUrl } from "./photos.js";
+import Stays from "./Stays.jsx";
+import { dayEnds, dayPoints } from "./stays.js";
 import { useTripView } from "./context.js";
 import { describe as describeWeather } from "./weather.js";
 
@@ -79,6 +81,7 @@ export default function ItineraryTab({ trip, near }) {
 
   return (
     <div className="tab-body">
+      <Stays trip={trip} near={near} />
       <Itinerary trip={trip} near={near} />
       <button className="add-day" onClick={() => dispatch(op.createDay(trip.id, { date: suggestedDate() }))}>
         + Add day
@@ -162,7 +165,7 @@ function Itinerary({ trip, near }) {
     >
       <ol className="day-list">
         {days.map((day, index) => (
-          <Day key={day.id} day={day} index={index} days={days} near={near} />
+          <Day key={day.id} day={day} index={index} days={days} near={near} lodgings={trip.lodgings ?? []} />
         ))}
       </ol>
       <DragOverlay>{dragging && <div className="stop drag-overlay">{dragging.name}</div>}</DragOverlay>
@@ -170,7 +173,7 @@ function Itinerary({ trip, near }) {
   );
 }
 
-function Day({ day, index, days, near }) {
+function Day({ day, index, days, near, lodgings }) {
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
   const [adding, setAdding] = useState(null); // null | "search" | "manual"
@@ -182,12 +185,16 @@ function Day({ day, index, days, near }) {
   const forecast = weather?.forecast;
   const warn = weather?.warnings.find((w) => w.level === "warn");
 
-  // Route legs go between consecutive stops that have coordinates.
-  const pinnedIds = day.stops.filter((s) => s.lat != null).map((s) => s.id);
-  const legFor = (stop) => {
-    const i = pinnedIds.indexOf(stop.id);
+  // The day's route: [start stay], stops that have coordinates, [end stay].
+  // Leg n of the route goes from point n to point n+1.
+  const ends = dayEnds(day, lodgings);
+  const points = dayPoints(day, lodgings);
+  const sequence = points.map((p) => (p.kind === "stop" ? p.id : p.kind));
+  const legInto = (key) => {
+    const i = sequence.indexOf(key);
     return route && i > 0 ? route.legs[i - 1] : null;
   };
+  const lastPlace = points.filter((p) => p.kind !== "end").at(-1);
 
   const reorder = (delta) => dispatch(op.reorderDays(tripId, movedIds(days, index, delta)));
   const remove = () => {
@@ -285,6 +292,7 @@ function Day({ day, index, days, near }) {
 
       <SortableContext items={day.stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <ol ref={setNodeRef} className={`stop-list${isOver ? " drop-target" : ""}`}>
+          {ends.start && <StayRow stay={ends.start} label="Start at" />}
           {day.stops.map((stop, stopIndex) => (
             <Stop
               key={stop.id}
@@ -292,11 +300,15 @@ function Day({ day, index, days, near }) {
               index={stopIndex}
               day={day}
               days={days}
-              previous={stopIndex > 0 ? day.stops[stopIndex - 1] : null}
-              leg={legFor(stop)}
+              previous={stopIndex > 0 ? day.stops[stopIndex - 1] : ends.start}
+              leg={legInto(stop.id)}
             />
           ))}
           {day.stops.length === 0 && <li className="empty-day muted small">No stops yet. Drag one here or add a place.</li>}
+          {ends.end && lastPlace && (
+            <Leg from={lastPlace} to={ends.end} mode={day.travel_mode ?? "walk"} leg={legInto("end")} />
+          )}
+          {ends.end && <StayRow stay={ends.end} label="End at" />}
         </ol>
       </SortableContext>
 
@@ -485,6 +497,19 @@ export function Thumb({ place, number }) {
       )}
       {number != null && <span className="thumb-number">{number}</span>}
     </div>
+  );
+}
+
+// A day's start or end at your stay (see stays.js), shown around its stops.
+function StayRow({ stay, label }) {
+  return (
+    <li className="stay-row">
+      <span className="stay-icon" aria-hidden="true">
+        🛏️
+      </span>
+      <span className="muted small">{label}</span>
+      <strong className="small">{stay.name}</strong>
+    </li>
   );
 }
 
