@@ -240,7 +240,8 @@ export default function TripPage() {
 
 // --- The drawer (desktop) / bottom sheet (phone) ---------------------------------
 
-const SHEET_SNAPS = { peek: 0.16, half: 0.5, full: 0.92 }; // share of the screen height
+const SHEET_SNAPS = { half: 0.5, full: 0.92 }; // share of the screen height
+const SHEET_PEEK_PX = 150; // same as .drawer.sheet-peek in index.css
 
 function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
   const navigate = useNavigate();
@@ -257,26 +258,60 @@ function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [setOpen]);
 
-  // Phone: dragging the handle resizes the sheet live; letting go snaps it to
-  // the nearest of peek / half / full.
-  function onHandleDown(e) {
-    if (isDesktop()) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { startY: e.clientY, startHeight: e.currentTarget.parentElement.getBoundingClientRect().height };
+  // Phone: dragging the sheet's top (the handle bar and the trip name under
+  // it, a ~90 px tall target instead of a thin bar) resizes it live; letting
+  // go snaps it to peek / half / full. A quick flick counts too: a short fast
+  // swipe moves it one step that way. A touch only becomes a drag after moving a few pixels,
+  // so the buttons in the header (home, Edit) still work as normal taps.
+  const sheetRef = useRef(null);
+  const suppressClick = useRef(false);
+  function onSheetDown(e) {
+    suppressClick.current = false;
+    if (isDesktop() || !e.target.closest(".sheet-handle, .drawer-head")) return;
+    drag.current = {
+      id: e.pointerId,
+      startY: e.clientY,
+      startHeight: sheetRef.current.getBoundingClientRect().height,
+      moving: false,
+      lastY: e.clientY,
+      lastT: e.timeStamp,
+      speed: 0, // px per ms, positive = upwards
+      height: null,
+    };
   }
-  function onHandleMove(e) {
-    if (!drag.current) return;
-    setDragHeight(Math.max(80, drag.current.startHeight + (drag.current.startY - e.clientY)));
-  }
-  function onHandleUp() {
-    if (!drag.current) return;
-    drag.current = null;
-    if (dragHeight != null) {
-      const share = dragHeight / window.innerHeight;
-      const nearest = Object.entries(SHEET_SNAPS).sort((a, b) => Math.abs(a[1] - share) - Math.abs(b[1] - share))[0][0];
-      setOpen(nearest !== "peek");
-      setFull(nearest === "full");
+  function onSheetMove(e) {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.id) return;
+    if (!d.moving) {
+      if (Math.abs(e.clientY - d.startY) < 6) return;
+      d.moving = true;
+      // From now on this element gets the moves even if the finger leaves it.
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
+    const dt = e.timeStamp - d.lastT;
+    if (dt > 0) d.speed = (d.lastY - e.clientY) / dt;
+    d.lastY = e.clientY;
+    d.lastT = e.timeStamp;
+    d.height = Math.min(window.innerHeight * SHEET_SNAPS.full, Math.max(80, d.startHeight + (d.startY - e.clientY)));
+    setDragHeight(d.height);
+  }
+  function onSheetUp(e) {
+    const d = drag.current;
+    drag.current = null;
+    if (!d?.moving) return;
+    // The click that follows a drag must not also toggle the sheet.
+    suppressClick.current = true;
+    const heights = [SHEET_PEEK_PX, window.innerHeight * SHEET_SNAPS.half, window.innerHeight * SHEET_SNAPS.full];
+    const nearest = (h) => heights.reduce((best, x, i) => (Math.abs(x - h) < Math.abs(heights[best] - h) ? i : best), 0);
+    let target = nearest(d.height); // a slow drag: wherever it was let go
+    // A flick (fast, and not held still before letting go): at least one
+    // step in its direction from where the drag started, like Google Maps.
+    const speed = e.timeStamp - d.lastT > 100 ? 0 : d.speed;
+    const from = nearest(d.startHeight);
+    if (speed > 0.4) target = Math.max(target, Math.min(from + 1, 2));
+    if (speed < -0.4) target = Math.min(target, Math.max(from - 1, 0));
+    setOpen(target > 0);
+    setFull(target === 2);
     setDragHeight(null);
   }
   const cycleSheet = () => {
@@ -298,21 +333,29 @@ function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
 
   return (
     <aside
+      ref={sheetRef}
       className={`drawer sheet-${sheet}${open ? " open" : ""}${dragHeight != null ? " dragging" : ""}`}
       style={style}
       aria-label="Trip planner"
       aria-hidden={!open && isDesktop() ? true : undefined}
+      onPointerDown={onSheetDown}
+      onPointerMove={onSheetMove}
+      onPointerUp={onSheetUp}
+      onPointerCancel={onSheetUp}
+      onClickCapture={(e) => {
+        if (suppressClick.current) {
+          suppressClick.current = false;
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }}
     >
       <div
         className="sheet-handle"
         role="button"
         tabIndex={0}
         aria-label="Resize panel"
-        onPointerDown={onHandleDown}
-        onPointerMove={onHandleMove}
-        onPointerUp={onHandleUp}
-        onPointerCancel={onHandleUp}
-        onClick={() => dragHeight == null && cycleSheet()}
+        onClick={cycleSheet}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && cycleSheet()}
       >
         <span />

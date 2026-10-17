@@ -970,11 +970,17 @@ button.more[aria-expanded="true"] {
   .drawer.sheet-full {
     --sheet-height: calc(100svh - var(--top-height, 0px) - 70px);
   }
+  /* The drag zone (TripPage.jsx): a taller handle plus the header under it.
+     touch-action: none, or the browser treats a vertical swipe there as a
+     scroll attempt and cancels our drag halfway ("didn't register"). */
   .sheet-handle {
     display: grid;
     place-items: center;
-    padding: 8px 0 2px;
+    padding: 12px 0 8px;
     cursor: grab;
+    touch-action: none;
+  }
+  .drawer-head {
     touch-action: none;
   }
   .sheet-handle span {
@@ -987,7 +993,7 @@ button.more[aria-expanded="true"] {
     display: none;
   }
   .drawer-head {
-    padding-top: 4px;
+    padding-top: 0;
   }
   .top-search,
   .side-right .top-search {
