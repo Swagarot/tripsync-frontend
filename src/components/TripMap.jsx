@@ -80,8 +80,11 @@ export default function TripMap({ days, trip }) {
   return (
     <MapContainer
       center={[30, 10]}
-      zoom={2}
-      minZoom={2}
+      zoom={3}
+      // Not 2: the world is then narrower than a wide screen, and zooming
+      // back in from it made the route lines jump up for a moment. Level 3
+      // still shows whole continents.
+      minZoom={3}
       maxBounds={WORLD_EDGES}
       maxBoundsViscosity={1}
       className="map"
