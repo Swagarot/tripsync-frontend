@@ -495,6 +495,9 @@ textarea {
 
 .stop-list {
   border-top: 1px solid var(--border);
+  /* Room under the line: a "Start at" stay (a filled pill) sat flush against
+     it and swallowed it. */
+  padding-top: 8px;
 }
 .stop {
   display: flex;
