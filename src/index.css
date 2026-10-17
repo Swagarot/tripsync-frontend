@@ -648,10 +648,15 @@ button.more[aria-expanded="true"] {
   padding: 0 0 0 44px;
   min-height: 22px;
 }
+/* The thin vertical line joining one place to the next: as tall as the leg
+   (a transit leg has several rows), so it runs from the place above to the
+   one below instead of stopping short under the first. */
 .leg-line {
   width: 2px;
-  height: 18px;
-  background: var(--border);
+  min-height: 18px;
+  align-self: stretch;
+  flex-shrink: 0;
+  background: var(--control-border);
 }
 .stop-name {
   font-weight: 600;
@@ -1471,8 +1476,10 @@ button.icon-only {
 
 .transit-leg {
   align-items: flex-start;
+  flex-wrap: nowrap; /* rides stay beside the line, so it runs their full height */
 }
 .transit-rides {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
