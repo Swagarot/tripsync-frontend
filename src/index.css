@@ -1157,10 +1157,43 @@ a.menu-item:hover {
   font-size: 0.75rem;
   color: var(--muted);
 }
-.mode-select {
-  width: auto;
-  font-size: 0.85rem;
-  padding: 4px 6px;
+/* The day's travel mode: a pill of four icon buttons, the chosen one filled. */
+.mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--control-border);
+}
+.mode-switch button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+}
+.mode-switch button:hover:not([aria-checked="true"]) {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.mode-switch button[aria-checked="true"] {
+  background: var(--accent);
+  color: #fff;
+  cursor: default;
+}
+:root[data-theme="dark"] .mode-switch button[aria-checked="true"],
+:root[data-theme="dim"] .mode-switch button[aria-checked="true"] {
+  color: #0d1413;
+}
+.mode-switch svg {
+  width: 17px;
+  height: 17px;
 }
 
 /* ---- Sync / update bars ---- */

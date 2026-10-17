@@ -21,7 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
 import { dayColor } from "../colors.js";
 import { DayForm, StopForm } from "../components/forms.jsx";
-import { DeleteIcon, DownIcon, EditIcon, GripIcon, UpIcon } from "../components/icons.jsx";
+import { BikeIcon, CarIcon, DeleteIcon, DownIcon, EditIcon, GripIcon, TransitIcon, UpIcon, WalkIcon } from "../components/icons.jsx";
 import PlaceSearch from "../components/PlaceSearch.jsx";
 import { addDays, formatDay } from "../dates.js";
 import { centerOf, distanceKm, formatDistance, formatDuration } from "../geo.js";
@@ -39,7 +39,12 @@ import { describe as describeWeather } from "./weather.js";
 // places. Every change is an op (store/ops.js): dispatch() applies it on
 // screen immediately and the sync loop sends it when there's a connection.
 
-const TRAVEL_MODES = { walk: "Walk", bike: "Bike", drive: "Drive", transit: "Transit" };
+const TRAVEL_MODES = {
+  walk: { name: "Walk", Icon: WalkIcon },
+  bike: { name: "Bike", Icon: BikeIcon },
+  drive: { name: "Drive", Icon: CarIcon },
+  transit: { name: "Transit", Icon: TransitIcon },
+};
 const MODE_VERB = { walk: "walk", bike: "by bike", drive: "drive", transit: "by transit" };
 
 // Plain names for public-transport modes (Transitous / GTFS mode names).
@@ -255,18 +260,24 @@ function Day({ day, index, days, near, lodgings }) {
             {day.notes && <p className="notes">{day.notes}</p>}
           </div>
           <div className="day-tools">
-            <select
-              className="mode-select"
-              aria-label="How you get around this day"
-              value={day.travel_mode ?? "walk"}
-              onChange={(e) => dispatch(op.updateDay(tripId, day.id, { travel_mode: e.target.value }))}
-            >
-              {Object.entries(TRAVEL_MODES).map(([value, text]) => (
-                <option key={value} value={value}>
-                  {text}
-                </option>
-              ))}
-            </select>
+            {/* Four icon buttons, like Google Maps' travel modes; the chosen one is filled. */}
+            <div className="mode-switch" role="radiogroup" aria-label="How you get around this day">
+              {Object.entries(TRAVEL_MODES).map(([value, { name, Icon }]) => {
+                const chosen = (day.travel_mode ?? "walk") === value;
+                return (
+                  <button
+                    key={value}
+                    role="radio"
+                    aria-checked={chosen}
+                    aria-label={name}
+                    title={name}
+                    onClick={() => !chosen && dispatch(op.updateDay(tripId, day.id, { travel_mode: value }))}
+                  >
+                    <Icon />
+                  </button>
+                );
+              })}
+            </div>
             <button className="more" aria-label={`Day ${index + 1} actions`} aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
               ⋯
             </button>

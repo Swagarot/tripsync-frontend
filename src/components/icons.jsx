@@ -58,3 +58,37 @@ export const HomeIcon = () => (
     <path d="M5 9.5V21h5v-6h4v6h5V9.5" />
   </Icon>
 );
+
+// How you get around (the day's travel mode).
+export const WalkIcon = () => (
+  <Icon>
+    <circle cx="13" cy="4" r="1.6" />
+    <path d="m7 21 3-6.5M10 14.5l1.5-6.5 3 3 3 1M11.5 8 8 9.5 7 13M15 21l-2.5-6.5" />
+  </Icon>
+);
+
+export const BikeIcon = () => (
+  <Icon>
+    <circle cx="5.5" cy="16.5" r="3.5" />
+    <circle cx="18.5" cy="16.5" r="3.5" />
+    <path d="M5.5 16.5 9 9h6.5l3 7.5M9 9l3.5 7.5h-7M14 5h2.5l-1 4" />
+  </Icon>
+);
+
+export const CarIcon = () => (
+  <Icon>
+    <path d="M5 16V11l2-5h10l2 5v5M3.5 11h17M5 16h14" />
+    <path d="M6 16v3M18 16v3" />
+    <circle cx="8" cy="13.5" r="0.6" />
+    <circle cx="16" cy="13.5" r="0.6" />
+  </Icon>
+);
+
+export const TransitIcon = () => (
+  <Icon>
+    <rect x="5.5" y="3" width="13" height="14" rx="3" />
+    <path d="M5.5 10.5h13M9 17l-2 4M15 17l2 4" />
+    <circle cx="9" cy="13.8" r="0.6" />
+    <circle cx="15" cy="13.8" r="0.6" />
+  </Icon>
+);
