@@ -31,6 +31,7 @@ import { categoryIcon } from "./categories.js";
 import Memories, { Stars } from "./Memories.jsx";
 import { coverUrl } from "./photos.js";
 import Stays from "./Stays.jsx";
+import { googleMapsDayUrl } from "./export.js";
 import { dayEnds, dayPoints } from "./stays.js";
 import { useTripView } from "./context.js";
 import { describe as describeWeather } from "./weather.js";
@@ -200,6 +201,8 @@ function Day({ day, index, days, near, lodgings }) {
     return route && i > 0 ? route.legs[i - 1] : null;
   };
   const lastPlace = points.filter((p) => p.kind !== "end").at(-1);
+  // Directions through the day's places in Google Maps (2+ places).
+  const gmaps = points.length >= 2 ? googleMapsDayUrl(day, lodgings) : null;
 
   const reorder = (delta) => dispatch(op.reorderDays(tripId, movedIds(days, index, delta)));
   const remove = () => {
@@ -239,6 +242,11 @@ function Day({ day, index, days, near, lodgings }) {
               )}
             </h2>
             {day.title && <p className="day-title">{day.title}</p>}
+            {gmaps && (
+              <a className="gmaps-link small" href={gmaps.url} target="_blank" rel="noreferrer">
+                Open in Google Maps ↗{gmaps.truncated && " (first 11 places)"}
+              </a>
+            )}
             {route && (
               <p className="muted small">
                 {formatDuration(route.duration_s)} {MODE_VERB[day.travel_mode ?? "walk"]}

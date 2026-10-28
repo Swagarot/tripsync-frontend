@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { api } from "../api.js";
 import { useAuth } from "../auth/context.js";
 import { ErrorMessage } from "../components/common.jsx";
@@ -83,9 +83,23 @@ export default function SharePanel({ trip, onClose }) {
   return (
     <div className="tab-body share-panel">
       <div className="panel-row">
-        <h2>Sharing</h2>
+        <h2>Share &amp; export</h2>
         <button onClick={onClose}>Done</button>
       </div>
+      <div className="export-links">
+        <Link className="button" to={`/trips/${trip.id}/print`}>
+          📄 PDF / print
+        </Link>
+        <Link className="button" to={`/trips/${trip.id}/print`}>
+          💾 Keepsake file
+        </Link>
+      </div>
+      <p className="muted small">
+        Both open the printable trip: print it or save it as a PDF, or download it as one HTML file with all the
+        photos inside, to keep forever.
+      </p>
+
+      <h3>People</h3>
       {!online && <p className="muted small">Sharing needs a connection.</p>}
 
       <ul className="member-list">

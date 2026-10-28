@@ -1944,3 +1944,59 @@ a.button.primary {
 .read-only-scope:disabled :is(button.link, button.more, .grip, .expense-form) {
   display: none;
 }
+
+/* ---- Export: print page (PDF), keepsake, Google Maps links ---- */
+
+.export-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+a.button:not(.primary) {
+  border: 1px solid var(--control-border);
+  color: var(--text);
+  background: var(--surface);
+}
+.gmaps-link {
+  display: inline-block;
+  margin-top: 2px;
+}
+.print-page {
+  padding: 16px;
+}
+.print-toolbar {
+  max-width: 820px;
+  margin: 0 auto 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.print-toolbar .grow {
+  flex: 1;
+}
+.print-hint {
+  max-width: 820px;
+  margin: 0 auto 12px;
+}
+.print-page .trip-doc {
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+@media print {
+  /* Only the document: no app bars, toolbar or page background. */
+  .top,
+  .print-toolbar,
+  .print-hint {
+    display: none !important;
+  }
+  body,
+  .app,
+  .print-page {
+    background: #fff !important;
+    padding: 0;
+  }
+  .print-page .trip-doc {
+    box-shadow: none;
+  }
+}

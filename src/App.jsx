@@ -10,6 +10,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 const TripPage = lazy(() => import("./pages/TripPage.jsx"));
 const TripsPage = lazy(() => import("./pages/TripsPage.jsx"));
 const JoinPage = lazy(() => import("./pages/JoinPage.jsx"));
+const PrintPage = lazy(() => import("./pages/PrintPage.jsx"));
 
 // Pages that need a logged-in user. While the stored token is still being
 // checked (user === undefined) show nothing instead of flashing the login page.
@@ -94,6 +95,14 @@ export default function App() {
           element={
             <RequireLogin>
               <TripPage />
+            </RequireLogin>
+          }
+        />
+        <Route
+          path="/trips/:tripId/print"
+          element={
+            <RequireLogin>
+              <PrintPage />
             </RequireLogin>
           }
         />

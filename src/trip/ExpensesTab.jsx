@@ -4,6 +4,7 @@ import { DeleteIcon } from "../components/icons.jsx";
 import { formatDay } from "../dates.js";
 import { op } from "../store/ops.js";
 import { dispatch } from "../store/store.js";
+import { EXPENSE_CATEGORIES as CATEGORIES } from "./categories.js";
 import { CURRENCIES, formatMoney, guessHomeCurrency, loadRates, toHome, totals } from "./currency.js";
 import { personName } from "./people.js";
 import { balances, settleUp } from "./split.js";
@@ -11,14 +12,6 @@ import { balances, settleUp } from "./split.js";
 // Expenses: each is entered in the currency actually paid (¥ in Japan), and
 // totals are shown in the trip's home currency (₪), using the last known
 // European Central Bank rates, which are also kept on the device for offline.
-const CATEGORIES = {
-  food: "🍜 Food",
-  transport: "🚆 Transport",
-  lodging: "🛏️ Lodging",
-  activities: "🎟️ Activities",
-  shopping: "🛍️ Shopping",
-  other: "📦 Other",
-};
 
 const LAST_CURRENCY_KEY = "tripsync.lastCurrency";
 

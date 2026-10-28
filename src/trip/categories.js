@@ -22,3 +22,13 @@ export function categoryIcon(category) {
   for (const [pattern, icon] of ICONS) if (pattern.test(category ?? "")) return icon;
   return "📍";
 }
+
+// Expense categories (the backend accepts exactly these keys).
+export const EXPENSE_CATEGORIES = {
+  food: "🍜 Food",
+  transport: "🚆 Transport",
+  lodging: "🛏️ Lodging",
+  activities: "🎟️ Activities",
+  shopping: "🛍️ Shopping",
+  other: "📦 Other",
+};

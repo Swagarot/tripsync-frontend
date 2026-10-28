@@ -1,0 +1,232 @@
+/* The trip as a document (TripDocument.jsx): the print page / PDF and the
+   keepsake file. Self-contained on purpose: the keepsake embeds this file as
+   its only stylesheet, so nothing here may depend on the app's own CSS or
+   theme. It always looks like paper: white page, dark text. */
+
+.trip-doc {
+  --ink: #1d1d1b;
+  --muted: #6b675f;
+  --line: #e4e1da;
+  --accent: #0f6e6a;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 28px 48px;
+  background: #fff;
+  color: var(--ink);
+  font: 15px/1.5 system-ui, "Segoe UI", Roboto, sans-serif;
+}
+.trip-doc h1 {
+  font-size: 2rem;
+  margin: 0 0 4px;
+  line-height: 1.2;
+}
+.trip-doc h2 {
+  font-size: 1.2rem;
+  margin: 28px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.trip-doc h3 {
+  font-size: 1rem;
+  margin: 14px 0 6px;
+}
+.trip-doc p {
+  margin: 2px 0;
+}
+.doc-kicker {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+.doc-sub,
+.doc-muted {
+  color: var(--muted);
+}
+.doc-muted {
+  font-size: 0.88rem;
+}
+.doc-title {
+  font-weight: 600;
+  color: var(--accent);
+}
+.doc-notes {
+  white-space: pre-wrap;
+  font-size: 0.92rem;
+}
+.doc-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.85rem;
+  /* Keep the day colours when printing (browsers drop backgrounds otherwise). */
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.doc-map {
+  margin: 20px 0 0;
+}
+.doc-map svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.doc-map-bg {
+  fill: #eef3f2;
+}
+.doc-map polyline {
+  fill: none;
+  stroke-width: 3.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.doc-map circle {
+  stroke: #fff;
+  stroke-width: 2;
+}
+.doc-map-stay rect {
+  fill: #3b3f46;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.doc-map figcaption i.doc-key-stay {
+  background: #3b3f46;
+  border-radius: 2px;
+}
+.doc-map text {
+  fill: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.doc-map figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.doc-map figcaption i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+.doc-map,
+.doc-map * {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.doc-day {
+  border-top: 1px solid var(--line);
+  /* A day doesn't start at the very bottom of a printed page. */
+  break-inside: avoid-page;
+}
+.doc-stops {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.doc-stop {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  padding: 8px 0;
+  break-inside: avoid;
+}
+.doc-thumb {
+  width: 72px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f1efe9;
+}
+.doc-icon {
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+}
+.doc-stop-name {
+  font-weight: 600;
+}
+.doc-time {
+  color: var(--accent);
+  margin-right: 8px;
+}
+.doc-visited {
+  color: #2f8f4e;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+.doc-stars {
+  color: #c48a12;
+}
+.doc-photos {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.doc-photos img {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.doc-stay {
+  color: var(--muted);
+  font-size: 0.88rem;
+  padding: 4px 0 4px 84px;
+}
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.doc-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 0;
+}
+.doc-columns {
+  columns: 2;
+}
+.doc-columns li {
+  break-inside: avoid;
+}
+.doc-foot {
+  margin-top: 40px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 600px) {
+  .trip-doc {
+    padding: 20px 16px 32px;
+  }
+  .doc-columns {
+    columns: 1;
+  }
+}
+
+@media print {
+  .trip-doc {
+    padding: 0;
+    max-width: none;
+  }
+  @page {
+    margin: 16mm 14mm;
+  }
+}
