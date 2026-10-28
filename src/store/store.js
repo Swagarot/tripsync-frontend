@@ -147,6 +147,12 @@ export async function refreshTrip(tripId) {
 
 export async function dispatch(o) {
   await loaded;
+  // Viewers can only look. The page hides the editing controls; this is the
+  // backstop, so a stray edit can't sit in the queue until the server says 403.
+  if (state.baseTrips[o.tripId]?.role === "viewer") {
+    setState({ rejected: { message: "You can only view this trip." } });
+    return;
+  }
   // opId: identifies this queue entry, so exactly it gets removed once sent.
   const outbox = [...state.outbox, { ...o, opId: newId() }];
   setState({ outbox, rejected: null });

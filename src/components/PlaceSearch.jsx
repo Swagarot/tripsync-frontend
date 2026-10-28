@@ -152,7 +152,7 @@ export default function PlaceSearch({
                 selected={selected}
                 adding={adding}
                 addLabel={addLabel}
-                onAdd={add}
+                onAdd={onAdd ? add : null}
                 onBack={() => setSelected(null)}
                 targets={targets}
                 target={chosenTarget}
@@ -216,7 +216,7 @@ export default function PlaceSearch({
       {error && <p className="error">{error.message}</p>}
 
       {selected ? (
-        <PlaceCard selected={selected} adding={adding} addLabel={addLabel} onAdd={add} onBack={() => setSelected(null)} />
+        <PlaceCard selected={selected} adding={adding} addLabel={addLabel} onAdd={onAdd ? add : null} onBack={() => setSelected(null)} />
       ) : (
         <>
           {searching && <p className="muted small">Searching…</p>}
@@ -301,9 +301,12 @@ function PlaceCard({ selected, adding, addLabel, onAdd, onBack, targets, target,
               ))}
             </select>
           )}
-          <button className="primary" onClick={onAdd} disabled={adding}>
-            {adding ? "Saving…" : addLabel}
-          </button>
+          {/* No onAdd = look only (a trip you can only view). */}
+          {onAdd && (
+            <button className="primary" onClick={onAdd} disabled={adding}>
+              {adding ? "Saving…" : addLabel}
+            </button>
+          )}
           <button onClick={onBack}>Back</button>
         </div>
       </div>

@@ -1802,3 +1802,145 @@ textarea::placeholder {
 .drawer-head .panel-title {
   flex: 1;
 }
+
+/* ---- Shared trips ---- */
+
+/* The fieldset that disables a viewer's controls should not look like one. */
+.read-only-scope {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.shared-note {
+  color: var(--accent);
+  font-weight: 500;
+}
+.share-panel .panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.member-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.member-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.member-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.invite {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.invite-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.invite-link input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+.invite-link p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.join-card {
+  max-width: 480px;
+  margin: 40px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Expenses on a shared trip: balances and who pays whom. */
+.balances {
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.balances h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+.balances h4 {
+  margin: 10px 0 4px;
+}
+.balances ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.balances li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+.balances li.owed span:last-child {
+  color: var(--ok);
+}
+.balances li.owes span:last-child {
+  color: var(--danger);
+}
+.balances .payments li {
+  justify-content: flex-start;
+}
+.split-between {
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.split-between legend {
+  font-size: 0.9rem;
+  padding: 0 4px;
+}
+.split-between .check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: normal;
+}
+
+/* A link that looks like a button ("Open it" on the join page). */
+a.button {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  text-align: center;
+}
+a.button.primary {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* A viewer's drawer: the controls are disabled by the fieldset; the "add" and
+   "more" links are hidden too, since a dimmed link still looks clickable. */
+.read-only-scope:disabled :is(button.link, button.more, .grip, .expense-form) {
+  display: none;
+}

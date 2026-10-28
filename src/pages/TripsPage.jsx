@@ -108,6 +108,11 @@ function TripCard({ trip }) {
         <span className="muted small">
           {p.days} day{p.days === 1 ? "" : "s"} · {p.places} place{p.places === 1 ? "" : "s"}
         </span>
+        {trip.role && trip.role !== "owner" && (
+          <span className="shared-note small">
+            Shared by {trip.owner_email?.split("@")[0] ?? "someone"} · {trip.role === "viewer" ? "view only" : "can edit"}
+          </span>
+        )}
       </div>
     </Link>
   );

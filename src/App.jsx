@@ -9,13 +9,17 @@ import LoginPage from "./pages/LoginPage.jsx";
 // The service worker still precaches all of them, so they work offline.
 const TripPage = lazy(() => import("./pages/TripPage.jsx"));
 const TripsPage = lazy(() => import("./pages/TripsPage.jsx"));
+const JoinPage = lazy(() => import("./pages/JoinPage.jsx"));
 
 // Pages that need a logged-in user. While the stored token is still being
 // checked (user === undefined) show nothing instead of flashing the login page.
+// Not logged in: go to the login page, and come back here afterwards (an
+// invite link opened while logged out lands on the invite after logging in).
 function RequireLogin({ children }) {
   const { user } = useAuth();
+  const location = useLocation();
   if (user === undefined) return <p className="muted center">Loading…</p>;
-  if (user === null) return <Navigate to="/login" replace />;
+  if (user === null) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return children;
 }
 
@@ -90,6 +94,14 @@ export default function App() {
           element={
             <RequireLogin>
               <TripPage />
+            </RequireLogin>
+          }
+        />
+        <Route
+          path="/join/:token"
+          element={
+            <RequireLogin>
+              <JoinPage />
             </RequireLogin>
           }
         />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router";
+import { Navigate, useLocation } from "react-router";
 import { useAuth } from "../auth/context.js";
 import { ErrorMessage } from "../components/common.jsx";
 
@@ -10,9 +10,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const from = useLocation().state?.from;
 
-  // Already logged in (or just succeeded): go to the trip list.
-  if (user) return <Navigate to="/" replace />;
+  // Already logged in (or just succeeded): back to where you were going (an
+  // invite link), else the trip list.
+  if (user) return <Navigate to={from ?? "/"} replace />;
 
   const isRegister = mode === "register";
 

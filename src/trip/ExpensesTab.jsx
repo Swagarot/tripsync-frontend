@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../auth/context.js";
 import { DeleteIcon } from "../components/icons.jsx";
 import { formatDay } from "../dates.js";
 import { op } from "../store/ops.js";
 import { dispatch } from "../store/store.js";
 import { CURRENCIES, formatMoney, guessHomeCurrency, loadRates, toHome, totals } from "./currency.js";
+import { personName } from "./people.js";
+import { balances, settleUp } from "./split.js";
 
 // Expenses: each is entered in the currency actually paid (¥ in Japan), and
 // totals are shown in the trip's home currency (₪), using the last known
@@ -20,6 +23,12 @@ const CATEGORIES = {
 const LAST_CURRENCY_KEY = "tripsync.lastCurrency";
 
 export default function ExpensesTab({ trip }) {
+  const { user } = useAuth();
+  const members = trip.members ?? [];
+  // Splitting only matters once someone else is on the trip.
+  const shared = members.length > 1;
+  const canEdit = trip.role !== "viewer";
+  const name = (id) => personName(members, id, user?.id);
   const home = trip.home_currency ?? guessHomeCurrency();
   const [rates, setRates] = useState(null);
   const expenses = [...(trip.expenses ?? [])].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
@@ -46,6 +55,7 @@ export default function ExpensesTab({ trip }) {
           Show in{" "}
           <select
             value={home}
+            disabled={!canEdit}
             onChange={(e) => dispatch(op.updateTrip(trip.id, { home_currency: e.target.value }))}
             aria-label="Home currency"
           >
@@ -78,7 +88,9 @@ export default function ExpensesTab({ trip }) {
       )}
       {rates?.date && <p className="muted small">Rates from {rates.date} (European Central Bank).</p>}
 
-      <ExpenseForm trip={trip} />
+      {shared && <Balances expenses={expenses} members={members} rates={rates?.rates} home={home} name={name} />}
+
+      {canEdit && <ExpenseForm trip={trip} members={shared ? members : null} me={user?.id} name={name} />}
 
       <ul className="expense-list">
         {expenses.map((e) => {
@@ -90,19 +102,40 @@ export default function ExpensesTab({ trip }) {
               </span>
               <div className="stop-body">
                 <span>{e.note || (CATEGORIES[e.category] ?? e.category).split(" ").slice(1).join(" ")}</span>
-                <p className="muted small">{e.date ? formatDay(e.date) : "No date"}</p>
+                <p className="muted small">
+                  {e.date ? formatDay(e.date) : "No date"}
+                  {shared && (e.paid_by ? ` · ${name(e.paid_by)} paid` : " · who paid?")}
+                  {shared && e.split_between?.length > 0 && ` · split: ${e.split_between.map(name).join(", ")}`}
+                </p>
+                {shared && canEdit && !e.paid_by && (
+                  <select
+                    className="small"
+                    aria-label="Who paid"
+                    value=""
+                    onChange={(ev) => dispatch(op.updateItem("expenses", trip.id, e.id, { paid_by: ev.target.value }))}
+                  >
+                    <option value="">Who paid?</option>
+                    {members.map((m) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {name(m.user_id)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div className="expense-amount">
                 <strong>{formatMoney(e.amount, e.currency)}</strong>
                 {converted != null && <span className="muted small">≈ {formatMoney(converted, home)}</span>}
               </div>
-              <button
-                aria-label="Delete expense"
-                className="danger icon-only"
-                onClick={() => dispatch(op.deleteItem("expenses", trip.id, e.id))}
-              >
-                <DeleteIcon />
-              </button>
+              {canEdit && (
+                <button
+                  aria-label="Delete expense"
+                  className="danger icon-only"
+                  onClick={() => dispatch(op.deleteItem("expenses", trip.id, e.id))}
+                >
+                  <DeleteIcon />
+                </button>
+              )}
             </li>
           );
         })}
@@ -111,7 +144,52 @@ export default function ExpensesTab({ trip }) {
   );
 }
 
-function ExpenseForm({ trip }) {
+// Who owes whom, and the fewest payments that settle it (split.js).
+function Balances({ expenses, members, rates, home, name }) {
+  if (!rates) return <p className="muted small">Balances appear once exchange rates have loaded.</p>;
+  const { net, skipped } = balances(expenses, members, rates);
+  const payments = settleUp(net);
+  const money = (cents) => formatMoney(Math.abs(cents) / 100, home);
+  return (
+    <section className="balances" aria-label="Balances">
+      <h3>Balances</h3>
+      <ul>
+        {Object.entries(net).map(([id, cents]) => (
+          <li key={id} className={cents > 0 ? "owed" : cents < 0 ? "owes" : ""}>
+            <span>{name(id)}</span>
+            <span>
+              {cents === 0
+                ? "settled"
+                : name(id) === "You"
+                  ? cents > 0 ? `get back ${money(cents)}` : `owe ${money(cents)}`
+                  : cents > 0 ? `gets back ${money(cents)}` : `owes ${money(cents)}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {payments.length > 0 && (
+        <>
+          <h4 className="small">To settle up</h4>
+          <ul className="payments">
+            {payments.map((p, i) => (
+              <li key={i}>
+                {name(p.from)} {name(p.from) === "You" ? "pay" : "pays"} {name(p.to) === "You" ? "you" : name(p.to)}:{" "}
+                <strong>{money(p.cents)}</strong>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {skipped.length > 0 && (
+        <p className="muted small">
+          {skipped.length} expense(s) not counted: who paid is not set, or there is no exchange rate for the currency.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ExpenseForm({ trip, members, me, name }) {
   const today = new Date().toISOString().slice(0, 10);
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState(() => {
@@ -124,11 +202,20 @@ function ExpenseForm({ trip }) {
   const [category, setCategory] = useState("food");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(today);
+  // Shared trips: who paid (you, by default) and who shares it (everyone).
+  const [paidBy, setPaidBy] = useState(me);
+  const [sharers, setSharers] = useState(null); // null = everyone
+  const everyone = members?.map((m) => m.user_id) ?? [];
+  const sharing = sharers ?? everyone;
+  const toggle = (id) => {
+    const next = sharing.includes(id) ? sharing.filter((x) => x !== id) : [...sharing, id];
+    setSharers(next.length === everyone.length ? null : next);
+  };
 
   function add(e) {
     e.preventDefault();
     const value = Number(amount);
-    if (!(value > 0)) return;
+    if (!(value > 0) || (members && sharing.length === 0)) return;
     dispatch(
       op.createItem("expenses", trip.id, {
         amount: Math.round(value * 100) / 100,
@@ -136,6 +223,7 @@ function ExpenseForm({ trip }) {
         category,
         note: note.trim() || null,
         date: date || null,
+        ...(members ? { paid_by: paidBy ?? null, split_between: sharers } : {}),
       }),
     );
     try {
@@ -183,6 +271,29 @@ function ExpenseForm({ trip }) {
         Note
         <input maxLength={300} placeholder="Ramen at Ichiran" value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
+      {members && (
+        <>
+          <label>
+            Paid by
+            <select value={paidBy ?? ""} onChange={(e) => setPaidBy(e.target.value)}>
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {name(m.user_id)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset className="split-between">
+            <legend>Split between</legend>
+            {members.map((m) => (
+              <label key={m.user_id} className="check">
+                <input type="checkbox" checked={sharing.includes(m.user_id)} onChange={() => toggle(m.user_id)} />
+                {name(m.user_id)}
+              </label>
+            ))}
+          </fieldset>
+        </>
+      )}
       <button type="submit" className="primary">
         Add expense
       </button>

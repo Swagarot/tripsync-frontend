@@ -14,6 +14,7 @@ import ExpensesTab from "../trip/ExpensesTab.jsx";
 import IdeasTab from "../trip/IdeasTab.jsx";
 import ItineraryTab from "../trip/ItineraryTab.jsx";
 import NotesTab from "../trip/NotesTab.jsx";
+import SharePanel from "../trip/SharePanel.jsx";
 import { RTL_LANGUAGES, useLanguage } from "../settings.js";
 import { dayRouteRequest, loadRoute } from "../trip/routes.js";
 import { cellKey, dayLocation, dayWeather, loadForecast } from "../trip/weather.js";
@@ -133,6 +134,20 @@ export default function TripPage() {
     refreshTrip(tripId);
   }, [tripId]);
 
+  // Shared trips: pick up other people's changes by asking again every 20 s
+  // while the page is visible ("polling"; live push via websockets is out of
+  // scope). Your own pending changes are re-applied on top of each fresh copy
+  // (store.js), so nothing you're typing gets lost. Changes to the same field
+  // from two people: the one saved last wins.
+  const sharedTrip = (trip?.members?.length ?? 0) > 1;
+  useEffect(() => {
+    if (!sharedTrip) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine) refreshTrip(tripId);
+    }, 20_000);
+    return () => clearInterval(timer);
+  }, [sharedTrip, tripId]);
+
   // Clicking a pin opens the drawer on the right tab and scrolls to the stop.
   const focus = useCallback(
     (id) => {
@@ -156,7 +171,7 @@ export default function TripPage() {
           ← All trips
         </Link>
         {trip === null ? (
-          <p>This trip doesn't exist (or was deleted).</p>
+          <p>This trip doesn't exist, was deleted, or you're no longer on it.</p>
         ) : online ? (
           <p className="muted">Loading…</p>
         ) : (
@@ -166,6 +181,7 @@ export default function TripPage() {
     );
   }
 
+  const readOnly = trip.role === "viewer";
   const pinned = trip.days.flatMap((d) => d.stops).filter((s) => s.lat != null);
   const near = centerOf(pinned) ?? (trip.dest_lat != null ? { lat: trip.dest_lat, lng: trip.dest_lng } : null);
   const badDays = trip.days.filter((d) => weatherFor(d)?.warnings.some((w) => w.level === "warn")).length;
@@ -207,9 +223,9 @@ export default function TripPage() {
         <PlaceSearch
           compact
           near={near}
-          targets={targets}
+          targets={readOnly ? null : targets}
           addLabel="Add"
-          onAdd={quickAdd}
+          onAdd={readOnly ? null : quickAdd}
           leading={
             <>
               <button
@@ -226,7 +242,7 @@ export default function TripPage() {
             </>
           }
         />
-        <Drawer trip={trip} tab={tab} setTab={setTab} badDays={badDays} open={open} setOpen={setOpen}>
+        <Drawer trip={trip} tab={tab} setTab={setTab} badDays={badDays} open={open} setOpen={setOpen} readOnly={readOnly}>
           {tab === "itinerary" && <ItineraryTab trip={trip} near={near} />}
           {tab === "ideas" && <IdeasTab trip={trip} near={near} />}
           {tab === "expenses" && <ExpensesTab trip={trip} />}
@@ -243,9 +259,10 @@ export default function TripPage() {
 const SHEET_SNAPS = { half: 0.5, full: 0.92 }; // share of the screen height
 const SHEET_PEEK_PX = 150; // same as .drawer.sheet-peek in index.css
 
-function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
+function Drawer({ trip, tab, setTab, badDays, open, setOpen, readOnly, children }) {
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(false);
+  const [panel, setPanel] = useState(null); // null = the tabs, "edit" = trip details, "share" = sharing
+  const togglePanel = (name) => setPanel((p) => (p === name ? null : name));
   const [full, setFull] = useState(false); // phone: half or full height when open
   const [dragHeight, setDragHeight] = useState(null);
   const drag = useRef(null);
@@ -372,29 +389,49 @@ function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
               .filter(Boolean)
               .join(" · ")}
           </p>
+          {trip.role && trip.role !== "owner" && (
+            <p className="shared-note small">
+              Shared by {trip.members?.find((m) => m.role === "owner")?.email.split("@")[0] ?? "someone"} ·{" "}
+              {readOnly ? "you can view" : "you can edit"}
+            </p>
+          )}
         </div>
         <div className="panel-actions">
-          <button onClick={() => setEditing((v) => !v)}>{editing ? "Close" : "Edit"}</button>
+          <button aria-pressed={panel === "share"} onClick={() => togglePanel("share")}>
+            Share
+          </button>
+          {!readOnly && (
+            <button aria-pressed={panel === "edit"} onClick={() => togglePanel("edit")}>
+              {panel === "edit" ? "Close" : "Edit"}
+            </button>
+          )}
           <button className="icon-btn close-btn" aria-label="Close trip panel" onClick={() => setOpen(false)}>
             ✕
           </button>
         </div>
       </header>
 
-      {editing ? (
+      {panel === "share" ? (
+        <div className="drawer-body">
+          <SharePanel trip={trip} onClose={() => setPanel(null)} />
+        </div>
+      ) : panel === "edit" ? (
         <div className="drawer-body">
           <div className="tab-body">
             <TripForm
               trip={trip}
-              onCancel={() => setEditing(false)}
+              nameLocked={trip.role !== "owner"}
+              onCancel={() => setPanel(null)}
               onSubmit={async (values) => {
                 await dispatch(op.updateTrip(trip.id, values));
-                setEditing(false);
+                setPanel(null);
               }}
             />
-            <button className="danger link" onClick={deleteTrip}>
-              Delete trip
-            </button>
+            {trip.role === "owner" && (
+              <button className="danger link" onClick={deleteTrip}>
+                Delete trip
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -420,7 +457,12 @@ function Drawer({ trip, tab, setTab, badDays, open, setOpen, children }) {
               </button>
             ))}
           </nav>
-          <div className="drawer-body">{children}</div>
+          <div className="drawer-body">
+            {/* Viewers: every button and field inside is disabled at once. */}
+            <fieldset className="read-only-scope" disabled={readOnly}>
+              {children}
+            </fieldset>
+          </div>
         </>
       )}
 

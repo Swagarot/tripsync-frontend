@@ -51,7 +51,9 @@ function Actions({ busy, label, onCancel }) {
   );
 }
 
-export function TripForm({ trip, onSubmit, onCancel, submitLabel = "Save" }) {
+// nameLocked: editors of someone else's trip change everything but its name
+// (renaming is the owner's call; the server refuses it too).
+export function TripForm({ trip, onSubmit, onCancel, submitLabel = "Save", nameLocked = false }) {
   const [values, bind] = useFields({
     name: trip?.name,
     start_date: trip?.start_date,
@@ -71,7 +73,7 @@ export function TripForm({ trip, onSubmit, onCancel, submitLabel = "Save" }) {
 
   const submit = (e) =>
     handle(e, {
-      name: (values.name?.trim() || autoName).slice(0, 200),
+      name: nameLocked ? trip.name : (values.name?.trim() || autoName).slice(0, 200),
       start_date: values.start_date || null,
       end_date: values.end_date || null,
       notes: orNull(values.notes),
@@ -90,6 +92,8 @@ export function TripForm({ trip, onSubmit, onCancel, submitLabel = "Save" }) {
           required={!autoName}
           maxLength={200}
           placeholder={autoName || "Japan in spring"}
+          disabled={nameLocked}
+          title={nameLocked ? "Only the trip's owner can rename it" : undefined}
           {...bind("name")}
         />
       </label>

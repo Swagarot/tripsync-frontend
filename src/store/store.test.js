@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyToList, applyToTrip, op } from "./ops.js";
-import { dispatch, flush, getState, init, refreshList, wipe } from "./store.js";
+import { dispatch, flush, getState, init, refreshList, refreshTrip, wipe } from "./store.js";
 
 // A fake backend standing in for fetch(). `down` simulates no connection,
 // `refuse` makes the server answer one path with an error.
@@ -33,6 +33,17 @@ beforeEach(async () => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("sync queue", () => {
+  it("never queues a viewer's edit on a shared trip", async () => {
+    server.fetch.mockImplementationOnce(async () => ({
+      status: 200, ok: true, json: async () => ({ id: "shared", name: "Alice's", role: "viewer", days: [] }),
+    }));
+    await refreshTrip("shared");
+    await dispatch(op.updateTrip("shared", { notes: "hi" }));
+    expect(getState().outbox).toHaveLength(0);
+    expect(getState().rejected.message).toMatch(/only view/);
+    expect(writes(server)).toEqual([]);
+  });
+
   it("keeps changes made offline and sends them in order when back online", async () => {
     server.down = true;
     const trip = op.createTrip({ name: "Offline trip" });
