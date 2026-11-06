@@ -29,21 +29,29 @@ export default function AuthProvider({ children }) {
   // object = the logged-in user.
   const [user, setUser] = useState(() => loadUser() ?? (getToken() ? undefined : null));
 
-  // On page load: if there's a stored token, ask the backend who it belongs
-  // to. This also catches a token that expired while the app was closed.
+  // On page load, and whenever the device comes back online: swap the stored
+  // token for a new one (the backend's token rotation, auth.py). The answer
+  // also says who's logged in, and a token that expired or was revoked while
+  // the app was closed gets a 401 here.
   useEffect(() => {
-    if (!getToken()) return;
-    api("/auth/me")
-      .then((me) => {
-        saveUser(me);
-        setUser(me);
-      })
-      .catch((err) => {
-        // No connection (status 0) or server trouble: keep the remembered
-        // user and work offline. Only a real "no" from the server logs out.
-        if (err.status === 401) setUser(null);
-        else setUser((current) => current ?? null);
-      });
+    const refresh = () => {
+      if (!getToken()) return;
+      api("/auth/refresh", { method: "POST" })
+        .then((data) => {
+          setToken(data.access_token);
+          saveUser(data.user);
+          setUser(data.user);
+        })
+        .catch((err) => {
+          // No connection (status 0) or server trouble: keep the remembered
+          // user and work offline. Only a real "no" from the server logs out.
+          if (err.status === 401) setUser(null);
+          else setUser((current) => current ?? null);
+        });
+    };
+    refresh();
+    window.addEventListener("online", refresh);
+    return () => window.removeEventListener("online", refresh);
   }, []);
 
   // api.js fires this when any request comes back 401 with our token.
@@ -68,10 +76,13 @@ export default function AuthProvider({ children }) {
     setUser(data.user);
   }, []);
 
-  const logout = useCallback(async () => {
-    // The token is just forgotten; the server keeps no session to end.
-    // (It stays technically valid until it expires, a known JWT trade-off.)
+  // everywhere: end the sessions on all of this user's devices, not just this one.
+  const logout = useCallback(async ({ everywhere = false } = {}) => {
+    // Ends this device's session on the server. Offline, that can't reach it:
+    // the token is still forgotten here, and on the server it runs out after
+    // at most 7 days (or the next "log out everywhere").
     // The offline copy is wiped so the next person on this device can't see it.
+    await api(everywhere ? "/auth/logout-all" : "/auth/logout", { method: "POST" }).catch(() => {});
     setToken(null);
     saveUser(null);
     setUser(null);
@@ -86,6 +97,7 @@ export default function AuthProvider({ children }) {
       login: (email, password) => signIn("/auth/login", email, password),
       register: (email, password) => signIn("/auth/register", email, password),
       logout,
+      logoutEverywhere: () => logout({ everywhere: true }),
     }),
     [user, signIn, logout],
   );

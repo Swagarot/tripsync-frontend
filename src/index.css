@@ -1021,7 +1021,19 @@ button.more[aria-expanded="true"] {
   font-size: 0.92rem;
   flex-wrap: wrap;
 }
-a.menu-item:hover {
+/* A menu row that is an action, not a link (log out on all devices). */
+button.menu-item {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.92rem;
+  text-align: start;
+  cursor: pointer;
+}
+a.menu-item:hover,
+button.menu-item:hover {
   background: var(--accent-soft);
 }
 .menu-label {

@@ -6,16 +6,16 @@ import { useSyncStatus } from "../store/hooks.js";
 // The app-wide settings, in one place: shown at the bottom of the trip page's
 // drawer, and in the header menu on the other pages.
 export default function AppMenu({ onNavigate }) {
-  const { user, logout } = useAuth();
+  const { user, logout, logoutEverywhere } = useAuth();
   const { pending } = useSyncStatus();
   const language = useLanguage();
   useTheme(); // re-render when the theme changes
   const theme = getTheme();
 
   // Logging out wipes this device's copy, including changes not yet synced.
-  const confirmLogout = () => {
+  const confirmLogout = (end = logout) => {
     if (pending === 0 || window.confirm(`${pending} change(s) haven't synced yet and will be lost. Log out anyway?`)) {
-      logout();
+      end();
     }
   };
 
@@ -50,10 +50,16 @@ export default function AppMenu({ onNavigate }) {
         <div className="menu-item menu-account">
           <span aria-hidden="true">👤</span>
           <span className="menu-label muted small">{user.email}</span>
-          <button className="link" onClick={confirmLogout}>
+          <button className="link" onClick={() => confirmLogout()}>
             Log out
           </button>
         </div>
+      )}
+      {user && (
+        // E.g. a lost phone: ends the login on every device, this one too.
+        <button className="menu-item" onClick={() => confirmLogout(logoutEverywhere)}>
+          <span aria-hidden="true">🔒</span> Log out on all devices
+        </button>
       )}
     </div>
   );
