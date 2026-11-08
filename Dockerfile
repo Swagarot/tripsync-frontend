@@ -21,7 +21,12 @@ RUN npm run build
 # no React, no Node needed to serve these, they're just static files
 
 # ---- Stage 2: serve the built files with nginx ----
-FROM nginx:alpine
+# The unprivileged variant: nginx runs as user 101, not root (plain
+# nginx:alpine starts its master process as root), like the backend's uid
+# 10001. It still listens on 80: the Helm chart's pod sysctl
+# (ip_unprivileged_port_start=0) lets non-root bind it, and Docker does the
+# same by default.
+FROM nginxinc/nginx-unprivileged:alpine
 
 # Copy ONLY the built static files from Stage 1 into nginx's default
 # folder for serving web content. Everything else from Stage 1
